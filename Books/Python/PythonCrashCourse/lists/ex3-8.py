@@ -1,35 +1,32 @@
-print("Initial List:")
-list = ["Bill Gates", "Elon Musk", "Steve Jobs"]
-
-
-print("\n")
-print(list[0])
-print(list[1])
-print(list[2])
-
-list.remove("Bill Gates")
-
-print("\n")
-print("Correction:")
-print(list[0])
-print(list[1])
-
-print("\n")
-
-
-list.insert(0, 'Linus Torlvads')
-list.insert(2, 'Davodev')
-list.append('ThePrimeAgen')
+list = ['Mexico', 'Japan', 'Spain', 'Brazil', 'Italy']
 print(list)
 
+print("sorted list")
+sorted_list = sorted(list)
+print(sorted_list)
 
-print("Sorry I can't invite you ", list.pop())
-print("Sorry I can't invite you ", list.pop())
-print("Sorry I can't invite you ", list.pop())
+print("Original list")
+print(list)
 
+print("Sorted list reverse")
+sorted_reverse_list = sorted(list)
+sorted_reverse_list.reverse()
+print(sorted_reverse_list)
+print("Original list")
+print(list)
 
-print("\n")
-print("using del")
-del list[1]
-del list[0]
+print("reverse list")
+list.reverse()
+print(list)
+list.reverse()
+print("list reversed back")
+list.reverse()
+print(list)
+
+print("Sort")
+list.sort()
+print(list)
+
+print("list sort reverse")
+list.sort(reverse=True)
 print(list)

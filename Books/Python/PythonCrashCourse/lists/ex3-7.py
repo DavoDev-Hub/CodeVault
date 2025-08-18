@@ -26,3 +26,10 @@ print(list)
 print("Sorry I can't invite you ", list.pop())
 print("Sorry I can't invite you ", list.pop())
 print("Sorry I can't invite you ", list.pop())
+
+
+print("\n")
+print("using del")
+del list[1]
+del list[0]
+print(list)
