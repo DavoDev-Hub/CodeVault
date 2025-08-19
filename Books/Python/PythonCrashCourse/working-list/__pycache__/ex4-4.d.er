@@ -1,0 +1,6 @@
+##[pylyzer] succeed /home/davo/Programacion/CodeVault/Books/Python/PythonCrashCourse/working-list/ex4-4.py 1755564136 70
+.numbers: global::Range({Type_v_global_7: Int | (Type_v_global_7 >= 1) and (Type_v_global_7 <= pred(1000001))})
+
+
+
+
