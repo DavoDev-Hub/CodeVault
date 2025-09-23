@@ -19,5 +19,8 @@ my_god = {
 
 people = [my_friend, my_enemy, my_god]
 
+
 for person in people:
-    print(person)
+    print(f"\nHere's what I know about {person['first_name'].title()}:")
+    for key, value in person.items():
+        print(f"{key.title()}: {value.title()}")
