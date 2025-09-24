@@ -4,5 +4,9 @@ friends_numbers = {
         "Jaz":[7,8]
 }
 
-for k, v in friends_numbers.items():
-    print(f'{k}: {v}')
+print("Favourite numbers")
+for name, numbers in friends_numbers.items():
+    print(f"{name}'s favourite numbers are:", end=" ")
+    for number in numbers:
+        print(f"{number}", end=" ")
+    print() 
