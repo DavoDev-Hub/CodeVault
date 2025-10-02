@@ -16,4 +16,11 @@ def make_album(artist, title, n_songs = None):
     for v,k in album.items():
         print(f'{v}: {k}')
 
-make_album('Arctic Monkeys', 'AM' )
+
+
+while True:
+    artist = input('Enter an artist:')
+    title = input('Enter te title of the album:')
+    n_songs = input('Enter de number of the songs:')
+    make_album(artist,title, n_songs)
+    
