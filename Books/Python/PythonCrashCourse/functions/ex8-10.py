@@ -9,4 +9,4 @@ def send_messages(new_messages):
     for n in new_messages:
         print(n)
 
-show_messages(messages[::-1])
+show_messages(messages[::-1]) 
