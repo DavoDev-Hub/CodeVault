@@ -19,4 +19,3 @@ user.greet_user()
 user = User('Negrox', 'Rodriguez', '22')
 user.describe_user()
 user.greet_user()
-
