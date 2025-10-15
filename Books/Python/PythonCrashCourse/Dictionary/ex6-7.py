@@ -1,23 +1,26 @@
-rivers = {
-    "nile": "egipt",
-    "amazon": "brazil",
-    "yangtze": "china",
-    "mississippi": "usa",
-    "danube": "germany",
-    "ganges": "india",
-    "volga": "russia",
-    "thames": "uk",
+my_friend = {
+    "first_name" : "Linus", 
+    "last_name" : "Torvalds",
+    "city" : "Finlandia"
 }
 
-for k,v in rivers.items():
-    print(f"The {k} runs through {v}")
 
-print("\n")
-print("Rivers: \n")
-for k in rivers.keys():
-    print(k)
+my_enemy = {
+    "first_name" : "Steve", 
+    "last_name" : "Jobs",
+    "city" : "San Francisco"
+}
 
-print("\n")
-print("Countries: \n")
-for v in rivers.values():
-    print(v)
+my_god = {
+    "first_name" : "Terry", 
+    "last_name" : "Davis",
+    "city" : "Wisconsin"
+}
+
+people = [my_friend, my_enemy, my_god]
+
+
+for person in people:
+    print(f"\nHere's what I know about {person['first_name'].title()}:")
+    for key, value in person.items():
+        print(f"{key.title()}: {value.title()}")
