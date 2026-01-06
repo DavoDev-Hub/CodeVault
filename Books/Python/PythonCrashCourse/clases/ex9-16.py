@@ -21,3 +21,4 @@ for clock_name, func in available_clocks:
         info=time.get_clock_info(clock_name),
         current=func())
     )
+
