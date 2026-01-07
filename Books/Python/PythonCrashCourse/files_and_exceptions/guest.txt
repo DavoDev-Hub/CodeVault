@@ -1,0 +1,1 @@
+Hi Juan Pablo you have written to a txt from python
