@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 
-path = Path('Books/Python/PythonCrashCourse/files_and_exceptions/username.json')
+path = Path('Books/Python/PythonCrashCourse/files_and_exceptions/number.json')
 '''number = input("What's your favorite number? ")
 
 contents = json.dumps(number)
