@@ -11,8 +11,10 @@ class AlienInvasion:
         pygame.init()
         self.clock = pygame.time.Clock() # Initialize the game clock 
         self.settings = Settings()
-        self.screen = pygame.display.set_mode((self.settings.screen_width, self.settings.screen_height)) # Set the screen size
-        
+        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN) # Set the game to fullscreen mode
+        self.settings.screen_width = self.screen.get_rect().width
+        self.settings.screen_height = self.screen.get_rect().height
+
         pygame.display.set_caption("Alien Invasion") # Set the window title
         self.ship = Ship(self) # Create an instance of Ship
         # Set the background color.
@@ -45,7 +47,7 @@ class AlienInvasion:
             self.ship.moving_left = True  # Start moving the ship to the left
         elif event.key == pygame.K_q:
             sys.exit()  # Quit the game
-            
+
     def _check_keyup_events(self, event):
         """Respond to key releases."""
         if event.key == pygame.K_RIGHT:
