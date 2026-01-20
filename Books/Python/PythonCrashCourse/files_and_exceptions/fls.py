@@ -242,20 +242,3 @@ def ejercicio10():
     finally:
         # Esto siempre se ejecuta
         print("Operación de lectura finalizada")
-
-# ejercicio10()
-
-
-# ========== INSTRUCCIONES ==========
-print("\n\n" + "=" * 50)
-print("INSTRUCCIONES:")
-print("=" * 50)
-print("""
-Para ejecutar los ejercicios, descomenta las líneas que llaman
-a cada función (quita el # al inicio).
-
-Por ejemplo:
-    ejercicio1()  # en lugar de # ejercicio1()
-
-¡Practica cada ejercicio y experimenta con el código!
-""")
