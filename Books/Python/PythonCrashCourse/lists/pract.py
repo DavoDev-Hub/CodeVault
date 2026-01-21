@@ -1,45 +1,41 @@
-# Ejercicio: Top 5 de películas favoritas
-# Practicar slicing, reversión y modificación de listas
+# Ejercicio: Lista de invitados a una fiesta
+# Practicar agregación, eliminación y bucles con listas
 
-peliculas = ['Inception', 'The Matrix', 'Interstellar', 'Pulp Fiction', 'The Shawshank Redemption', 'Fight Club', 'The Dark Knight']
+invitados = ['Ana', 'Carlos', 'María', 'Luis', 'Sofia']
 
-print("Lista completa de películas:")
-print(peliculas)
+print("Invitados originales:")
+for invitado in invitados:
+    print(f"- {invitado}")
 
-# Mostrar las tres primeras películas
-print("\nTop 3 películas:")
-print(peliculas[:3])
+# Alguien no puede asistir
+no_puede_asistir = invitados.pop(1)
+print(f"\n{no_puede_asistir} no puede asistir a la fiesta")
 
-# Mostrar las tres últimas películas
-print("\nÚltimas 3 películas:")
-print(peliculas[-3:])
+# Invitar a alguien más en su lugar
+nuevo_invitado = 'Pedro'
+invitados.insert(1, nuevo_invitado)
+print(f"Invitando a {nuevo_invitado} en su lugar")
 
-# Mostrar películas del medio (índices 2 a 5)
-print("\nPelículas del medio:")
-print(peliculas[2:5])
+# Encontramos una mesa más grande, añadimos más invitados
+invitados.insert(0, 'Elena')
+invitados.insert(len(invitados)//2, 'Jorge')
+invitados.append('Laura')
 
-# Crear una copia de la lista y ordenarla
-peliculas_ordenadas = peliculas.copy()
-peliculas_ordenadas.sort()
-print("\nPelículas ordenadas alfabéticamente:")
-print(peliculas_ordenadas)
+print("\nLista actualizada de invitados:")
+for i, invitado in enumerate(invitados, 1):
+    print(f"{i}. {invitado}")
 
-# Invertir el orden de la lista original
-peliculas.reverse()
-print("\nLista invertida:")
-print(peliculas)
+# Solo podemos invitar a 2 personas (mesa pequeña de nuevo)
+print("\nLo siento, solo puedo invitar a 2 personas")
+while len(invitados) > 2:
+    eliminado = invitados.pop()
+    print(f"Lo siento {eliminado}, no puedo invitarte")
 
-# Modificar una película específica
-peliculas[0] = 'The Godfather'
-print("\nDespués de cambiar la primera película:")
-print(peliculas)
+print("\nInvitados confirmados:")
+for invitado in invitados:
+    print(f"{invitado}, sigues invitado a la fiesta!")
 
-# Contar cuántas películas hay
-print(f"\nTotal de películas en la lista: {len(peliculas)}")
-
-# Verificar si una película está en la lista
-pelicula_buscar = 'Inception'
-if pelicula_buscar in peliculas:
-    print(f"\n'{pelicula_buscar}' está en la lista")
-else:
-    print(f"\n'{pelicula_buscar}' no está en la lista")
+# Vaciar la lista
+del invitados[:]
+print(f"\nLista final de invitados: {invitados}")
+print(f"Número de invitados: {len(invitados)}")
