@@ -7,13 +7,37 @@ descriptores, threading, dataclasses, y patrones de diseño
 import asyncio
 import time
 import re
-from typing import Dict, List, Tuple, Generator, Callable, Any
-from dataclasses import dataclass, field
-from functools import wraps
-from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor
+import math
+import json
+from typing import Dict, List, Tuple, Generator, Callable, Any, Optional, Union
+from dataclasses import dataclass, field, asdict
+from functools import wraps, lru_cache, cached_property, partial, reduce
+from collections import Counter, defaultdict, ChainMap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import statistics
 from abc import ABC, abstractmethod
+from enum import Enum, auto
+from pathlib import Path
+import hashlib
+
+
+# ============= ENUMERACIONES =============
+
+class ComplexityLevel(Enum):
+    """Niveles de complejidad del texto"""
+    SIMPLE = auto()
+    MEDIUM = auto()
+    COMPLEX = auto()
+    ADVANCED = auto()
+
+
+class AnalysisType(Enum):
+    """Tipos de análisis disponibles"""
+    FREQUENCY = auto()
+    SENTIMENT = auto()
+    STRUCTURAL = auto()
+    READABILITY = auto()
+    STATISTICAL = auto()
 
 
 # ============= DECORADORES AVANZADOS =============
@@ -74,6 +98,41 @@ def retry(max_attempts: int = 3, delay: float = 1.0):
     return decorator
 
 
+def log_execution(func: Callable) -> Callable:
+    """Decorador que registra la ejecución de funciones"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        print(f"📝 Ejecutando: {func.__name__}")
+        result = func(*args, **kwargs)
+        print(f"✓  {func.__name__} completado")
+        return result
+    return wrapper
+
+
+def memoize_with_expiry(expiry_seconds: int = 60):
+    """Decorador de memoization con expiración temporal"""
+    def decorator(func: Callable) -> Callable:
+        cache = {}
+        
+        @wraps(func)
+        def wrapper(*args):
+            current_time = time.time()
+            cache_key = args
+            
+            if cache_key in cache:
+                result, timestamp = cache[cache_key]
+                if current_time - timestamp < expiry_seconds:
+                    return result
+            
+            result = func(*args)
+            cache[cache_key] = (result, current_time)
+            return result
+        
+        wrapper.cache = cache
+        return wrapper
+    return decorator
+
+
 # ============= DESCRIPTOR PATTERN =============
 
 class ValidatedString:
@@ -96,6 +155,28 @@ class ValidatedString:
             raise TypeError(f"Expected string, got {type(value)}")
         if not self.min_length <= len(value) <= self.max_length:
             raise ValueError(f"String length must be between {self.min_length} and {self.max_length}")
+        setattr(obj, self.name, value)
+
+
+class PositiveNumber:
+    """Descriptor que valida números positivos"""
+    def __init__(self, default: float = 0.0):
+        self.default = default
+        self.name = None
+    
+    def __set_name__(self, owner, name):
+        self.name = f'_{name}'
+    
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        return getattr(obj, self.name, self.default)
+    
+    def __set__(self, obj, value):
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"Expected number, got {type(value)}")
+        if value < 0:
+            raise ValueError(f"Value must be positive, got {value}")
         setattr(obj, self.name, value)
 
 
@@ -131,6 +212,11 @@ class TextStatistics:
     avg_word_length: float = 0.0
     most_common: List[Tuple[str, int]] = field(default_factory=list)
     sentiment_score: float = 0.0
+    readability_score: float = 0.0
+    complexity_level: ComplexityLevel = ComplexityLevel.MEDIUM
+    lexical_diversity: float = 0.0
+    sentence_count: int = 0
+    text_hash: str = ""
     
     def __str__(self) -> str:
         return f"""
@@ -138,10 +224,24 @@ class TextStatistics:
    - Palabras totales: {self.total_words}
    - Caracteres: {self.total_chars}
    - Palabras únicas: {self.unique_words}
+   - Diversidad léxica: {self.lexical_diversity:.2%}
    - Longitud promedio: {self.avg_word_length:.2f}
    - Score de sentimiento: {self.sentiment_score:.2f}
+   - Legibilidad: {self.readability_score:.2f}
+   - Complejidad: {self.complexity_level.name}
+   - Oraciones: {self.sentence_count}
    - Palabras más comunes: {', '.join(f'{w}({c})' for w, c in self.most_common[:5])}
 """
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convierte a diccionario"""
+        data = asdict(self)
+        data['complexity_level'] = self.complexity_level.name
+        return data
+    
+    def to_json(self) -> str:
+        """Convierte a JSON"""
+        return json.dumps(self.to_dict(), indent=2, ensure_ascii=False)
 
 
 # ============= STRATEGY PATTERN CON ABC =============
@@ -195,6 +295,75 @@ class StructuralAnalysis(AnalysisStrategy):
         }
 
 
+class ReadabilityAnalysis(AnalysisStrategy):
+    """Análisis de legibilidad (índice Flesch simplificado)"""
+    def analyze(self, text: str) -> Dict[str, Any]:
+        words = re.findall(r'\b\w+\b', text)
+        sentences = [s for s in re.split(r'[.!?]+', text) if s.strip()]
+        syllables = sum(self._count_syllables(word) for word in words)
+        
+        if not sentences or not words:
+            return {'readability_score': 0.0, 'complexity_level': ComplexityLevel.SIMPLE}
+        
+        avg_words_per_sentence = len(words) / len(sentences)
+        avg_syllables_per_word = syllables / len(words)
+        
+        # Fórmula Flesch Reading Ease simplificada
+        score = 206.835 - 1.015 * avg_words_per_sentence - 84.6 * avg_syllables_per_word
+        score = max(0, min(100, score))  # Limitar entre 0-100
+        
+        # Determinar nivel de complejidad
+        if score >= 80:
+            complexity = ComplexityLevel.SIMPLE
+        elif score >= 60:
+            complexity = ComplexityLevel.MEDIUM
+        elif score >= 40:
+            complexity = ComplexityLevel.COMPLEX
+        else:
+            complexity = ComplexityLevel.ADVANCED
+        
+        return {
+            'readability_score': score,
+            'complexity_level': complexity,
+            'avg_syllables_per_word': avg_syllables_per_word,
+            'avg_words_per_sentence': avg_words_per_sentence
+        }
+    
+    def _count_syllables(self, word: str) -> int:
+        """Cuenta sílabas (aproximación simple)"""
+        word = word.lower()
+        vowels = 'aeiouáéíóúü'
+        count = 0
+        previous_was_vowel = False
+        
+        for char in word:
+            is_vowel = char in vowels
+            if is_vowel and not previous_was_vowel:
+                count += 1
+            previous_was_vowel = is_vowel
+        
+        return max(1, count)
+
+
+class StatisticalAnalysis(AnalysisStrategy):
+    """Análisis estadístico avanzado"""
+    def analyze(self, text: str) -> Dict[str, Any]:
+        words = re.findall(r'\b\w+\b', text)
+        word_lengths = [len(w) for w in words]
+        
+        if not word_lengths:
+            return {}
+        
+        return {
+            'median_word_length': statistics.median(word_lengths),
+            'mode_word_length': statistics.mode(word_lengths) if word_lengths else 0,
+            'stdev_word_length': statistics.stdev(word_lengths) if len(word_lengths) > 1 else 0,
+            'min_word_length': min(word_lengths),
+            'max_word_length': max(word_lengths),
+            'lexical_diversity': len(set(words)) / len(words) if words else 0
+        }
+
+
 # ============= GENERADORES =============
 
 def word_generator(text: str) -> Generator[str, None, None]:
@@ -210,6 +379,101 @@ def ngram_generator(text: str, n: int = 2) -> Generator[Tuple[str, ...], None, N
         yield tuple(words[i:i + n])
 
 
+def sliding_window(iterable, window_size: int = 3) -> Generator[List, None, None]:
+    """Generador de ventana deslizante"""
+    from collections import deque
+    window = deque(maxlen=window_size)
+    
+    for item in iterable:
+        window.append(item)
+        if len(window) == window_size:
+            yield list(window)
+
+
+# ============= OBSERVER PATTERN =============
+
+class AnalysisObserver(ABC):
+    """Observador abstracto para análisis"""
+    @abstractmethod
+    def update(self, event_type: str, data: Any):
+        pass
+
+
+class ConsoleObserver(AnalysisObserver):
+    """Observador que imprime en consola"""
+    def update(self, event_type: str, data: Any):
+        print(f"🔔 Evento: {event_type} | Datos: {data}")
+
+
+class StatisticsObserver(AnalysisObserver):
+    """Observador que recolecta estadísticas"""
+    def __init__(self):
+        self.events: List[Tuple[str, Any]] = []
+    
+    def update(self, event_type: str, data: Any):
+        self.events.append((event_type, data))
+    
+    def get_summary(self) -> Dict[str, int]:
+        return Counter(event for event, _ in self.events)
+
+
+class Observable:
+    """Clase observable que notifica a observadores"""
+    def __init__(self):
+        self._observers: List[AnalysisObserver] = []
+    
+    def attach(self, observer: AnalysisObserver):
+        if observer not in self._observers:
+            self._observers.append(observer)
+    
+    def detach(self, observer: AnalysisObserver):
+        if observer in self._observers:
+            self._observers.remove(observer)
+    
+    def notify(self, event_type: str, data: Any):
+        for observer in self._observers:
+            observer.update(event_type, data)
+
+
+# ============= CHAIN OF RESPONSIBILITY PATTERN =============
+
+class TextHandler(ABC):
+    """Handler abstracto para cadena de responsabilidad"""
+    def __init__(self):
+        self._next_handler: Optional[TextHandler] = None
+    
+    def set_next(self, handler: 'TextHandler') -> 'TextHandler':
+        self._next_handler = handler
+        return handler
+    
+    @abstractmethod
+    def handle(self, text: str) -> str:
+        if self._next_handler:
+            return self._next_handler.handle(text)
+        return text
+
+
+class CleanSpacesHandler(TextHandler):
+    """Limpia espacios múltiples"""
+    def handle(self, text: str) -> str:
+        text = re.sub(r'\s+', ' ', text).strip()
+        return super().handle(text)
+
+
+class RemoveSpecialCharsHandler(TextHandler):
+    """Remueve caracteres especiales"""
+    def handle(self, text: str) -> str:
+        text = re.sub(r'[^\w\s.!?,;-]', '', text)
+        return super().handle(text)
+
+
+class LowercaseHandler(TextHandler):
+    """Convierte a minúsculas"""
+    def handle(self, text: str) -> str:
+        text = text.lower()
+        return super().handle(text)
+
+
 # ============= CLASE PRINCIPAL CON METACLASE =============
 
 class SingletonMeta(type):
@@ -222,25 +486,57 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-class TextAnalyzer(metaclass=SingletonMeta):
-    """Analizador de texto avanzado (Singleton)"""
+class TextAnalyzer(Observable, metaclass=SingletonMeta):
+    """Analizador de texto avanzado (Singleton + Observable)"""
     
     name = ValidatedString(min_length=1, max_length=100)
+    analysis_count = PositiveNumber(default=0)
     
     def __init__(self, name: str = "Analizador Principal"):
+        Observable.__init__(self)
         self.name = name
         self.strategies: List[AnalysisStrategy] = []
         self.results_cache = {}
+        self._texts_analyzed: List[str] = []
+        self.analysis_count = 0
     
     def add_strategy(self, strategy: AnalysisStrategy):
         """Añade una estrategia de análisis"""
         self.strategies.append(strategy)
         return self
     
+    @property
+    def total_analyses(self) -> int:
+        """Número total de análisis realizados"""
+        return int(self.analysis_count)
+    
+    @cached_property
+    def supported_analyses(self) -> List[str]:
+        """Lista de análisis soportados"""
+        return ['frequency', 'sentiment', 'structural', 'readability', 'statistical']
+    
+    def __len__(self) -> int:
+        """Longitud = número de textos analizados"""
+        return len(self._texts_analyzed)
+    
+    def __getitem__(self, index: int) -> str:
+        """Acceso a textos analizados por índice"""
+        return self._texts_analyzed[index]
+    
+    def __iter__(self):
+        """Iterador sobre textos analizados"""
+        return iter(self._texts_analyzed)
+    
+    def __contains__(self, text: str) -> bool:
+        """Verifica si un texto ya fue analizado"""
+        return text in self._texts_analyzed
+    
     @timing_decorator
     @cache_results(max_size=50)
     def analyze_text(self, text: str) -> TextStatistics:
         """Análisis completo del texto"""
+        self.notify('analysis_started', {'text_length': len(text)})
+        
         words = list(word_generator(text))
         
         # Análisis de frecuencia
@@ -250,17 +546,41 @@ class TextAnalyzer(metaclass=SingletonMeta):
         # Análisis de sentimiento
         sentiment_result = SentimentAnalysis().analyze(text)
         
+        # Análisis estructural
+        structural_result = StructuralAnalysis().analyze(text)
+        
+        # Análisis de legibilidad
+        readability_result = ReadabilityAnalysis().analyze(text)
+        
+        # Análisis estadístico
+        statistical_result = StatisticalAnalysis().analyze(text)
+        
+        # Calcular hash del texto
+        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+        
         # Calcular longitud promedio
         avg_length = statistics.mean([len(w) for w in words]) if words else 0
         
-        return TextStatistics(
+        # Registrar análisis
+        self._texts_analyzed.append(text[:50] + '...' if len(text) > 50 else text)
+        self.analysis_count += 1
+        
+        stats = TextStatistics(
             total_words=len(words),
             total_chars=len(text),
             unique_words=len(set(words)),
             avg_word_length=avg_length,
             most_common=word_count.most_common(10),
-            sentiment_score=sentiment_result['sentiment_score']
+            sentiment_score=sentiment_result['sentiment_score'],
+            readability_score=readability_result.get('readability_score', 0.0),
+            complexity_level=readability_result.get('complexity_level', ComplexityLevel.MEDIUM),
+            lexical_diversity=statistical_result.get('lexical_diversity', 0.0),
+            sentence_count=structural_result.get('sentence_count', 0),
+            text_hash=text_hash
         )
+        
+        self.notify('analysis_completed', {'stats': stats.to_dict()})
+        return stats
     
     async def analyze_async(self, texts: List[str]) -> List[TextStatistics]:
         """Análisis asíncrono de múltiples textos"""
@@ -285,6 +605,73 @@ class TextAnalyzer(metaclass=SingletonMeta):
         """Genera estadísticas de n-gramas"""
         ngrams = list(ngram_generator(text, n))
         return Counter(ngrams)
+    
+    def preprocess_text(self, text: str, lowercase: bool = True, 
+                       remove_special: bool = True) -> str:
+        """Preprocesa texto usando Chain of Responsibility"""
+        handler = CleanSpacesHandler()
+        
+        if remove_special:
+            handler.set_next(RemoveSpecialCharsHandler())
+        
+        if lowercase:
+            current = handler
+            while current._next_handler:
+                current = current._next_handler
+            current.set_next(LowercaseHandler())
+        
+        return handler.handle(text)
+    
+    def compare_texts(self, text1: str, text2: str) -> Dict[str, Any]:
+        """Compara dos textos"""
+        stats1 = self.analyze_text(text1)
+        stats2 = self.analyze_text(text2)
+        
+        return {
+            'similarity_score': self._calculate_similarity(text1, text2),
+            'word_diff': stats1.total_words - stats2.total_words,
+            'sentiment_diff': stats1.sentiment_score - stats2.sentiment_score,
+            'readability_diff': stats1.readability_score - stats2.readability_score
+        }
+    
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """Calcula similitud usando Jaccard"""
+        words1 = set(word_generator(text1))
+        words2 = set(word_generator(text2))
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        intersection = len(words1 & words2)
+        union = len(words1 | words2)
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def export_results(self, filepath: Union[str, Path]) -> None:
+        """Exporta resultados a archivo JSON"""
+        data = {
+            'analyzer_name': self.name,
+            'total_analyses': self.total_analyses,
+            'texts_analyzed': self._texts_analyzed
+        }
+        
+        Path(filepath).write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        print(f"💾 Resultados exportados a {filepath}")
+    
+    def batch_analyze(self, texts: List[str], show_progress: bool = True) -> List[TextStatistics]:
+        """Análisis en lote con barra de progreso"""
+        results = []
+        total = len(texts)
+        
+        for i, text in enumerate(texts, 1):
+            if show_progress:
+                print(f"\r📊 Progreso: {i}/{total} ({i/total*100:.1f}%)", end='')
+            results.append(self.analyze_text(text))
+        
+        if show_progress:
+            print()  # Nueva línea
+        
+        return results
 
 
 # ============= FUNCIONES DE DEMOSTRACIÓN =============
@@ -295,6 +682,10 @@ def demo_basic_analysis():
     with TextAnalysisContext("Análisis Básico"):
         analyzer = TextAnalyzer("Mi Analizador")
         
+        # Agregar observadores
+        stats_observer = StatisticsObserver()
+        analyzer.attach(stats_observer)
+        
         sample_text = """
         Python es un lenguaje de programación increíble y poderoso.
         Es excelente para análisis de datos, machine learning y desarrollo web.
@@ -304,12 +695,21 @@ def demo_basic_analysis():
         
         stats = analyzer.analyze_text(sample_text)
         print(stats)
+        print(f"\n📈 Hash del texto: {stats.text_hash}")
+        print(f"🎯 Análisis realizados: {analyzer.total_analyses}")
         
         # Análisis de n-gramas
         bigrams = analyzer.generate_ngrams(sample_text, 2)
         print(f"\n🔤 Bigramas más comunes:")
         for ngram, count in bigrams.most_common(5):
             print(f"   {' '.join(ngram)}: {count}")
+        
+        # Preprocesamiento
+        processed = analyzer.preprocess_text(sample_text)
+        print(f"\n🔧 Texto preprocesado (primeros 100 caracteres): {processed[:100]}...")
+        
+        # Resumen de eventos
+        print(f"\n📊 Eventos capturados: {stats_observer.get_summary()}")
 
 
 @timing_decorator
@@ -378,12 +778,94 @@ def demo_decorator_retry():
     print(f"   Resultado: {result}")
 
 
+def demo_text_comparison():
+    """Demostración de comparación de textos"""
+    print("\n🔍 Demostración de Comparación de Textos:")
+    
+    analyzer = TextAnalyzer()
+    
+    text1 = "Python es excelente para ciencia de datos y análisis."
+    text2 = "Python es genial para machine learning y análisis de datos."
+    
+    comparison = analyzer.compare_texts(text1, text2)
+    
+    print(f"   Texto 1: {text1}")
+    print(f"   Texto 2: {text2}")
+    print(f"\n   📊 Resultados:")
+    print(f"      - Similitud: {comparison['similarity_score']:.2%}")
+    print(f"      - Diferencia de palabras: {comparison['word_diff']}")
+    print(f"      - Diferencia de sentimiento: {comparison['sentiment_diff']:.2f}")
+    print(f"      - Diferencia de legibilidad: {comparison['readability_diff']:.2f}")
+
+
+def demo_advanced_features():
+    """Demostración de características avanzadas"""
+    print("\n🚀 Demostración de Características Avanzadas:")
+    
+    analyzer = TextAnalyzer()
+    
+    # Usando functools
+    from functools import reduce
+    texts = [
+        "Python es increíble.",
+        "Programar es divertido.",
+        "La tecnología avanza rápido."
+    ]
+    
+    # Combinar todas las palabras
+    all_words = reduce(lambda a, b: a + list(word_generator(b)), texts, [])
+    print(f"   Total de palabras combinadas: {len(all_words)}")
+    
+    # Usar métodos mágicos
+    analyzer.analyze_text(texts[0])
+    analyzer.analyze_text(texts[1])
+    
+    print(f"\n   📚 Usando métodos mágicos:")
+    print(f"      - len(analyzer): {len(analyzer)}")
+    print(f"      - analyzer[0]: {analyzer[0]}")
+    print(f"      - 'Python' in analyzer[0]: {'Python' in analyzer[0]}")
+    
+    # Sliding window
+    words = ['Python', 'es', 'un', 'lenguaje', 'poderoso']
+    windows = list(sliding_window(words, 3))
+    print(f"\n   🪟 Ventanas deslizantes (tamaño 3):")
+    for window in windows:
+        print(f"      {window}")
+
+
+def demo_statistics():
+    """Demostración de estadísticas avanzadas"""
+    print("\n📈 Demostración de Estadísticas Avanzadas:")
+    
+    analyzer = TextAnalyzer()
+    
+    complex_text = """
+    La inteligencia artificial está revolucionando múltiples industrias.
+    Los algoritmos de aprendizaje automático procesan enormes cantidades de datos.
+    Las redes neuronales profundas imitan el funcionamiento del cerebro humano.
+    Esta tecnología está transformando fundamentalmente nuestra sociedad contemporánea.
+    """
+    
+    stats = analyzer.analyze_text(complex_text)
+    
+    print(f"   📊 Estadísticas detalladas:")
+    print(f"      - Diversidad léxica: {stats.lexical_diversity:.2%}")
+    print(f"      - Nivel de complejidad: {stats.complexity_level.name}")
+    print(f"      - Score de legibilidad: {stats.readability_score:.2f}")
+    print(f"      - Total de oraciones: {stats.sentence_count}")
+    
+    # Exportar a JSON
+    print(f"\n   📄 JSON generado:")
+    print(stats.to_json())
+
+
 # ============= PROGRAMA PRINCIPAL =============
 
 def main():
     """Función principal que ejecuta todas las demostraciones"""
     print("=" * 80)
     print("🐍 SISTEMA AVANZADO DE ANÁLISIS DE TEXTO EN PYTHON 🐍")
+    print("   Versión 2.0 - Actualización Mejorada")
     print("=" * 80)
     
     # Verificar Singleton
@@ -391,17 +873,25 @@ def main():
     analyzer2 = TextAnalyzer("Segundo Analizador")
     print(f"\n🔍 Verificación Singleton: {analyzer1 is analyzer2}")
     print(f"   Nombre del analizador: {analyzer1.name}")
+    print(f"   Análisis soportados: {analyzer1.supported_analyses}")
     
     # Demostraciones
     demo_basic_analysis()
     demo_parallel_analysis()
     demo_generators()
     demo_decorator_retry()
+    demo_text_comparison()
+    demo_advanced_features()
+    demo_statistics()
     
     # Análisis asíncrono
     asyncio.run(demo_async_analysis())
     
+    # Resumen final
     print("\n" + "=" * 80)
+    print("📊 RESUMEN FINAL:")
+    print(f"   Total de análisis realizados: {analyzer1.total_analyses}")
+    print(f"   Textos en memoria: {len(analyzer1)}")
     print("✨ Todas las demostraciones completadas exitosamente ✨")
     print("=" * 80)
 
