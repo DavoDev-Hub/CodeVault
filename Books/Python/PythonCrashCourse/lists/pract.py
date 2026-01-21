@@ -1,35 +1,45 @@
-# Ejercicio: Gestión de una lista de tareas
-# Crear una lista de tareas pendientes y practicar diferentes operaciones
+# Ejercicio: Top 5 de películas favoritas
+# Practicar slicing, reversión y modificación de listas
 
-tareas = ['estudiar python', 'hacer ejercicio', 'leer un libro', 'cocinar', 'llamar a un amigo']
+peliculas = ['Inception', 'The Matrix', 'Interstellar', 'Pulp Fiction', 'The Shawshank Redemption', 'Fight Club', 'The Dark Knight']
 
-print("Lista original de tareas:")
-print(tareas)
+print("Lista completa de películas:")
+print(peliculas)
 
-# Añadir una nueva tarea al final
-tareas.append('meditar')
-print("\nDespués de añadir 'meditar':")
-print(tareas)
+# Mostrar las tres primeras películas
+print("\nTop 3 películas:")
+print(peliculas[:3])
 
-# Insertar una tarea urgente al principio
-tareas.insert(0, 'revisar emails')
-print("\nDespués de insertar tarea urgente:")
-print(tareas)
+# Mostrar las tres últimas películas
+print("\nÚltimas 3 películas:")
+print(peliculas[-3:])
 
-# Eliminar una tarea completada
-tarea_completada = tareas.pop(2)
-print(f"\nTarea completada: {tarea_completada}")
-print("Tareas restantes:")
-print(tareas)
+# Mostrar películas del medio (índices 2 a 5)
+print("\nPelículas del medio:")
+print(peliculas[2:5])
 
-# Ordenar la lista alfabéticamente
-tareas.sort()
-print("\nTareas ordenadas alfabéticamente:")
-print(tareas)
+# Crear una copia de la lista y ordenarla
+peliculas_ordenadas = peliculas.copy()
+peliculas_ordenadas.sort()
+print("\nPelículas ordenadas alfabéticamente:")
+print(peliculas_ordenadas)
 
-# Mostrar el número de tareas pendientes
-print(f"\nTienes {len(tareas)} tareas pendientes")
+# Invertir el orden de la lista original
+peliculas.reverse()
+print("\nLista invertida:")
+print(peliculas)
 
-# Acceder a la primera y última tarea
-print(f"Primera tarea: {tareas[0]}")
-print(f"Última tarea: {tareas[-1]}")
+# Modificar una película específica
+peliculas[0] = 'The Godfather'
+print("\nDespués de cambiar la primera película:")
+print(peliculas)
+
+# Contar cuántas películas hay
+print(f"\nTotal de películas en la lista: {len(peliculas)}")
+
+# Verificar si una película está en la lista
+pelicula_buscar = 'Inception'
+if pelicula_buscar in peliculas:
+    print(f"\n'{pelicula_buscar}' está en la lista")
+else:
+    print(f"\n'{pelicula_buscar}' no está en la lista")
