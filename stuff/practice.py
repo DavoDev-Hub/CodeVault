@@ -287,20 +287,67 @@ class FrequencyAnalysis(AnalysisStrategy):
 
 
 class SentimentAnalysis(AnalysisStrategy):
-    """Análisis de sentimiento simple"""
-    POSITIVE_WORDS = {'bueno', 'excelente', 'genial', 'increíble', 'feliz', 'amor', 'perfecto'}
-    NEGATIVE_WORDS = {'malo', 'terrible', 'horrible', 'triste', 'odio', 'error', 'problema'}
+    """
+    Análisis de sentimiento mejorado con categorías emocionales.
+    Detecta emociones específicas más allá de positivo/negativo.
+    """
+    POSITIVE_WORDS = {
+        'bueno', 'excelente', 'genial', 'increíble', 'feliz', 'amor', 'perfecto',
+        'fantástico', 'maravilloso', 'espectacular', 'estupendo', 'brillante',
+        'positivo', 'alegre', 'exitoso', 'éxito', 'victoria', 'ganar'
+    }
+    NEGATIVE_WORDS = {
+        'malo', 'terrible', 'horrible', 'triste', 'odio', 'error', 'problema',
+        'pésimo', 'deficiente', 'fracaso', 'negativo', 'desastre', 'fallo',
+        'inútil', 'difícil', 'complicado', 'preocupante', 'crisis'
+    }
+    ENTHUSIASM_WORDS = {
+        'increíble', 'asombroso', 'impresionante', 'wow', 'guau', 'genial',
+        'extraordinario', 'fascinante', 'emocionante'
+    }
+    NEUTRAL_WORDS = {
+        'normal', 'regular', 'estándar', 'común', 'típico', 'habitual'
+    }
     
     def analyze(self, text: str) -> Dict[str, Any]:
+        """Analiza el sentimiento y emociones del texto"""
         words = set(re.findall(r'\b\w+\b', text.lower()))
+        
+        if not words:
+            return {
+                'sentiment_score': 0.0,
+                'positive_words': 0,
+                'negative_words': 0,
+                'enthusiasm_level': 0,
+                'neutrality': 0,
+                'emotion': 'neutral'
+            }
+        
         positive = len(words & self.POSITIVE_WORDS)
         negative = len(words & self.NEGATIVE_WORDS)
+        enthusiasm = len(words & self.ENTHUSIASM_WORDS)
+        neutral = len(words & self.NEUTRAL_WORDS)
         
-        score = (positive - negative) / max(len(words), 1) * 100
+        # Calcular score ponderado
+        score = ((positive * 1.5 + enthusiasm * 2) - (negative * 1.5)) / max(len(words), 1) * 100
+        
+        # Determinar emoción dominante
+        if enthusiasm > 1:
+            emotion = 'entusiasta'
+        elif positive > negative:
+            emotion = 'positivo'
+        elif negative > positive:
+            emotion = 'negativo'
+        else:
+            emotion = 'neutral'
+        
         return {
-            'sentiment_score': score,
+            'sentiment_score': round(score, 2),
             'positive_words': positive,
-            'negative_words': negative
+            'negative_words': negative,
+            'enthusiasm_level': enthusiasm,
+            'neutrality': neutral,
+            'emotion': emotion
         }
 
 
@@ -432,9 +479,27 @@ class KeywordAnalysis(AnalysisStrategy):
 # ============= GENERADORES =============
 
 def word_generator(text: str) -> Generator[str, None, None]:
-    """Generador lazy de palabras"""
+    """
+    Generador lazy de palabras optimizado.
+    
+    Args:
+        text: Texto del cual extraer palabras
+        
+    Yields:
+        Palabras individuales en minúsculas
+        
+    Example:
+        >>> list(word_generator("Hola Mundo"))
+        ['hola', 'mundo']
+    """
+    if not text:
+        return
+    
     for word in re.finditer(r'\b\w+\b', text.lower()):
-        yield word.group()
+        word_text = word.group()
+        # Filtrar palabras de un solo carácter si son números
+        if len(word_text) > 1 or not word_text.isdigit():
+            yield word_text
 
 
 def ngram_generator(text: str, n: int = 2) -> Generator[Tuple[str, ...], None, None]:
@@ -596,6 +661,21 @@ class TextAnalyzer(Observable, metaclass=SingletonMeta):
         """Verifica si un texto ya fue analizado"""
         return text in self._texts_analyzed
     
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Obtiene estadísticas sobre el caché de resultados.
+        
+        Returns:
+            Diccionario con información del caché
+        """
+        cache = getattr(self.analyze_text, 'cache', {})
+        return {
+            'cache_size': len(cache),
+            'texts_analyzed': len(self._texts_analyzed),
+            'total_analyses': self.total_analyses,
+            'cache_hit_potential': f"{len(cache) / max(self.total_analyses, 1) * 100:.1f}%"
+        }
+    
     @timing_decorator
     @cache_results(max_size=50)
     def analyze_text(self, text: str) -> TextStatistics:
@@ -729,16 +809,35 @@ class TextAnalyzer(Observable, metaclass=SingletonMeta):
         
         return intersection / union if union > 0 else 0.0
     
-    def export_results(self, filepath: Union[str, Path]) -> None:
-        """Exporta resultados a archivo JSON"""
+    def export_results(self, filepath: Union[str, Path], format: str = 'json') -> None:
+        """
+        Exporta resultados a archivo.
+        
+        Args:
+            filepath: Ruta del archivo de destino
+            format: Formato de exportación ('json' o 'csv')
+        """
         data = {
             'analyzer_name': self.name,
             'total_analyses': self.total_analyses,
             'texts_analyzed': self._texts_analyzed
         }
         
-        Path(filepath).write_text(json.dumps(data, indent=2, ensure_ascii=False))
-        print(f"💾 Resultados exportados a {filepath}")
+        filepath = Path(filepath)
+        
+        if format.lower() == 'json':
+            filepath.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+        elif format.lower() == 'csv':
+            import csv
+            with filepath.open('w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Analizador', 'Total Análisis', 'Texto'])
+                for text in self._texts_analyzed:
+                    writer.writerow([self.name, self.total_analyses, text])
+        else:
+            raise ValueError(f"Formato no soportado: {format}. Use 'json' o 'csv'")
+        
+        print(f"💾 Resultados exportados a {filepath} (formato: {format.upper()})")
     
     def batch_analyze(self, texts: List[str], show_progress: bool = True) -> List[TextStatistics]:
         """Análisis en lote con barra de progreso"""
@@ -754,6 +853,27 @@ class TextAnalyzer(Observable, metaclass=SingletonMeta):
             print()  # Nueva línea
         
         return results
+    
+    def clear_cache(self) -> None:
+        """
+        Limpia el caché de resultados de análisis.
+        Útil para liberar memoria o forzar re-análisis.
+        """
+        if hasattr(self.analyze_text, 'clear_cache'):
+            self.analyze_text.clear_cache()
+            print("🧹 Caché limpiado exitosamente")
+        else:
+            print("⚠️  No hay caché para limpiar")
+    
+    def reset_statistics(self) -> None:
+        """
+        Resetea todas las estadísticas del analizador.
+        Mantiene las estrategias pero limpia historial.
+        """
+        self._texts_analyzed.clear()
+        self.analysis_count = 0
+        self.clear_cache()
+        print("🔄 Estadísticas reseteadas")
 
 
 # ============= FUNCIONES DE DEMOSTRACIÓN =============
@@ -921,6 +1041,36 @@ def demo_advanced_features():
         print(f"      {window}")
 
 
+def demo_cache_management():
+    """Demostración de gestión de caché"""
+    print("\n🗄️  Demostración de Gestión de Caché:")
+    
+    analyzer = TextAnalyzer()
+    
+    # Analizar algunos textos
+    texts = [
+        "Python es un lenguaje increíble",
+        "La programación es fascinante",
+        "Python es un lenguaje increíble"  # Repetido para demostrar caché
+    ]
+    
+    for text in texts:
+        analyzer.analyze_text(text)
+    
+    # Mostrar estadísticas de caché
+    cache_stats = analyzer.get_cache_stats()
+    print(f"\n   📊 Estadísticas de Caché:")
+    for key, value in cache_stats.items():
+        print(f"      - {key}: {value}")
+    
+    # Exportar a CSV
+    try:
+        analyzer.export_results("resultados_test.csv", format='csv')
+        print(f"   ✅ Exportación a CSV exitosa")
+    except Exception as e:
+        print(f"   ℹ️  Exportación omitida: {e}")
+
+
 def demo_statistics():
     """Demostración de estadísticas avanzadas"""
     print("\n📈 Demostración de Estadísticas Avanzadas:")
@@ -953,8 +1103,8 @@ def main():
     """Función principal que ejecuta todas las demostraciones"""
     print("=" * 80)
     print("🐍 SISTEMA AVANZADO DE ANÁLISIS DE TEXTO EN PYTHON 🐍")
-    print("   Versión 2.1 - Actualización con Análisis de Palabras Clave")
-    print("   Nuevas características: Validación mejorada, análisis de keywords")
+    print("   Versión 2.2 - Análisis de Emociones + Gestión de Caché")
+    print("   Nuevas características: Emociones detalladas, exportación CSV, caché stats")
     print("=" * 80)
     
     # Verificar Singleton
@@ -971,6 +1121,7 @@ def main():
     demo_decorator_retry()
     demo_text_comparison()
     demo_advanced_features()
+    demo_cache_management()
     demo_statistics()
     
     # Análisis asíncrono
