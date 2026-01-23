@@ -205,7 +205,22 @@ class TextAnalysisContext:
 
 @dataclass
 class TextStatistics:
-    """Estadísticas de texto"""
+    """
+    Estadísticas de texto.
+    
+    Attributes:
+        total_words: Número total de palabras en el texto
+        total_chars: Número total de caracteres incluyendo espacios
+        unique_words: Cantidad de palabras únicas (sin repetición)
+        avg_word_length: Longitud promedio de las palabras
+        most_common: Lista de tuplas (palabra, frecuencia) más comunes
+        sentiment_score: Puntuación de sentimiento (-100 a 100)
+        readability_score: Puntuación de legibilidad (0-100, Flesch Reading Ease)
+        complexity_level: Nivel de complejidad del texto
+        lexical_diversity: Ratio de palabras únicas sobre palabras totales (0-1)
+        sentence_count: Número de oraciones en el texto
+        text_hash: Hash MD5 del texto (8 caracteres)
+    """
     total_words: int = 0
     total_chars: int = 0
     unique_words: int = 0
@@ -217,6 +232,13 @@ class TextStatistics:
     lexical_diversity: float = 0.0
     sentence_count: int = 0
     text_hash: str = ""
+    
+    def __post_init__(self):
+        """Valida los datos después de la inicialización"""
+        if self.total_words < 0:
+            raise ValueError("total_words debe ser no negativo")
+        if self.lexical_diversity < 0 or self.lexical_diversity > 1:
+            raise ValueError("lexical_diversity debe estar entre 0 y 1")
     
     def __str__(self) -> str:
         return f"""
@@ -361,6 +383,49 @@ class StatisticalAnalysis(AnalysisStrategy):
             'min_word_length': min(word_lengths),
             'max_word_length': max(word_lengths),
             'lexical_diversity': len(set(words)) / len(words) if words else 0
+        }
+
+
+class KeywordAnalysis(AnalysisStrategy):
+    """
+    Análisis de palabras clave usando TF-IDF simplificado.
+    Identifica las palabras más importantes del texto.
+    """
+    # Palabras vacías comunes en español
+    STOP_WORDS = {
+        'el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'ser', 'se', 'no', 'haber',
+        'por', 'con', 'su', 'para', 'como', 'estar', 'tener', 'le', 'lo', 'todo',
+        'pero', 'más', 'hacer', 'o', 'poder', 'decir', 'este', 'ir', 'otro', 'ese',
+        'si', 'me', 'ya', 'ver', 'porque', 'dar', 'cuando', 'él', 'muy', 'sin',
+        'vez', 'mucho', 'saber', 'qué', 'sobre', 'mi', 'alguno', 'mismo', 'yo',
+        'también', 'hasta', 'año', 'dos', 'querer', 'entre', 'así', 'primero',
+        'desde', 'grande', 'eso', 'ni', 'nos', 'llegar', 'pasar', 'tiempo'
+    }
+    
+    def analyze(self, text: str) -> Dict[str, Any]:
+        """Extrae palabras clave del texto"""
+        words = [w.lower() for w in re.findall(r'\b\w+\b', text)]
+        
+        # Filtrar palabras vacías y palabras cortas
+        keywords = [w for w in words if w not in self.STOP_WORDS and len(w) > 3]
+        
+        if not keywords:
+            return {'keywords': [], 'keyword_density': 0.0}
+        
+        # Calcular frecuencias
+        keyword_freq = Counter(keywords)
+        total_keywords = len(keywords)
+        
+        # Palabras clave con su densidad
+        top_keywords = [
+            (word, count, count / total_keywords * 100) 
+            for word, count in keyword_freq.most_common(10)
+        ]
+        
+        return {
+            'keywords': top_keywords,
+            'keyword_density': len(keywords) / len(words) * 100 if words else 0,
+            'unique_keywords': len(set(keywords))
         }
 
 
@@ -534,7 +599,21 @@ class TextAnalyzer(Observable, metaclass=SingletonMeta):
     @timing_decorator
     @cache_results(max_size=50)
     def analyze_text(self, text: str) -> TextStatistics:
-        """Análisis completo del texto"""
+        """
+        Análisis completo del texto.
+        
+        Args:
+            text: El texto a analizar
+            
+        Returns:
+            TextStatistics con las estadísticas completas del texto
+            
+        Raises:
+            ValueError: Si el texto está vacío o es None
+        """
+        if not text or not text.strip():
+            raise ValueError("El texto no puede estar vacío")
+        
         self.notify('analysis_started', {'text_length': len(text)})
         
         words = list(word_generator(text))
@@ -554,6 +633,9 @@ class TextAnalyzer(Observable, metaclass=SingletonMeta):
         
         # Análisis estadístico
         statistical_result = StatisticalAnalysis().analyze(text)
+        
+        # Análisis de palabras clave
+        keyword_result = KeywordAnalysis().analyze(text)
         
         # Calcular hash del texto
         text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
@@ -703,6 +785,12 @@ def demo_basic_analysis():
         print(f"\n🔤 Bigramas más comunes:")
         for ngram, count in bigrams.most_common(5):
             print(f"   {' '.join(ngram)}: {count}")
+        
+        # Análisis de palabras clave
+        keyword_analysis = KeywordAnalysis().analyze(sample_text)
+        print(f"\n🔑 Palabras clave detectadas:")
+        for word, count, density in keyword_analysis['keywords'][:5]:
+            print(f"   {word}: {count} veces ({density:.1f}% densidad)")
         
         # Preprocesamiento
         processed = analyzer.preprocess_text(sample_text)
@@ -865,7 +953,8 @@ def main():
     """Función principal que ejecuta todas las demostraciones"""
     print("=" * 80)
     print("🐍 SISTEMA AVANZADO DE ANÁLISIS DE TEXTO EN PYTHON 🐍")
-    print("   Versión 2.0 - Actualización Mejorada")
+    print("   Versión 2.1 - Actualización con Análisis de Palabras Clave")
+    print("   Nuevas características: Validación mejorada, análisis de keywords")
     print("=" * 80)
     
     # Verificar Singleton
