@@ -2,6 +2,7 @@
 Sistema de Gestión de Biblioteca Digital
 Commit 1: Clases base con herencia, encapsulación y polimorfismo
 Commit 2: Sistema de préstamos, devoluciones y multas
+Commit 3: Sistema de reservas, estadísticas y notificaciones
 """
 
 from datetime import datetime, timedelta
@@ -47,6 +48,8 @@ class Usuario(Persona):
         self._activo = True
         self._multas_pendientes: float = 0.0
         self._prestamos_activos: List['Prestamo'] = []
+        self._reservas: List['Reserva'] = []
+        self._notificaciones: List[str] = []
         
         # Límites según tipo de usuario
         self._limite_prestamos = {
@@ -103,6 +106,19 @@ class Usuario(Persona):
         """Retorna el monto de multas pendientes"""
         return self._multas_pendientes
     
+    def agregar_notificacion(self, mensaje: str):
+        """Agrega una notificación al usuario"""
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
+        self._notificaciones.append(f"[{timestamp}] {mensaje}")
+    
+    def ver_notificaciones(self) -> List[str]:
+        """Retorna todas las notificaciones"""
+        return self._notificaciones.copy()
+    
+    def limpiar_notificaciones(self):
+        """Limpia todas las notificaciones"""
+        self._notificaciones.clear()
+    
     def suspender(self):
         """Suspende la cuenta del usuario"""
         self._activo = False
@@ -131,6 +147,7 @@ class MaterialBibliografico:
         self._editorial = editorial
         self._disponible = True
         self._veces_prestado = 0
+        self._reservas: List['Reserva'] = []
     
     @property
     def id(self) -> int:
@@ -243,6 +260,52 @@ class Revista(MaterialBibliografico):
         return f"{estado} [{self._id}] {self._titulo} - Nº{self._numero} ({self._mes}/{self._año})"
 
 
+class Reserva:
+    """Sistema de reservas para materiales no disponibles"""
+    
+    _id_counter = 8000
+    
+    def __init__(self, usuario: Usuario, material: MaterialBibliografico):
+        Reserva._id_counter += 1
+        self._id = Reserva._id_counter
+        self._usuario = usuario
+        self._material = material
+        self._fecha_reserva = datetime.now()
+        self._activa = True
+        self._fecha_notificacion: Optional[datetime] = None
+    
+    @property
+    def id(self) -> int:
+        return self._id
+    
+    @property
+    def activa(self) -> bool:
+        return self._activa
+    
+    def cancelar(self):
+        """Cancela la reserva"""
+        self._activa = False
+    
+    def notificar_disponibilidad(self):
+        """Notifica al usuario que el material está disponible"""
+        self._fecha_notificacion = datetime.now()
+        mensaje = f"📚 El material '{self._material.titulo}' que reservaste ya está disponible"
+        self._usuario.agregar_notificacion(mensaje)
+    
+    def get_info(self) -> dict:
+        return {
+            "id": self._id,
+            "usuario": self._usuario.nombre_completo,
+            "material": self._material.titulo,
+            "fecha_reserva": self._fecha_reserva.strftime("%d/%m/%Y"),
+            "activa": self._activa
+        }
+    
+    def __str__(self) -> str:
+        estado = "🔖 Activa" if self._activa else "✗ Cancelada"
+        return f"[{self._id}] {estado} - {self._material.titulo} → {self._usuario.nombre_completo}"
+
+
 class Prestamo:
     """Gestión de préstamos individuales"""
     
@@ -328,6 +391,7 @@ class Biblioteca:
         self._catalogo: List[MaterialBibliografico] = []
         self._usuarios: List[Usuario] = []
         self._prestamos: List[Prestamo] = []
+        self._reservas: List[Reserva] = []
         self._fecha_creacion = datetime.now()
         self._tarifa_multa_diaria = 2.0
     
@@ -440,6 +504,9 @@ class Biblioteca:
         prestamo._usuario._libros_prestados.remove(prestamo._material)
         prestamo._usuario._prestamos_activos.remove(prestamo)
         
+        # Procesar reservas para este material
+        self.procesar_reservas_material(prestamo._material)
+        
         # Registrar en historial
         prestamo._usuario._historial.append(prestamo.get_info())
         
@@ -489,12 +556,82 @@ class Biblioteca:
                 return prestamo
         return None
     
+    def crear_reserva(self, usuario_id: str, material_id: int) -> Optional[Reserva]:
+        """Crea una reserva para un material no disponible"""
+        usuario = self.buscar_usuario_por_id(usuario_id)
+        material = self.buscar_material_por_id(material_id)
+        
+        if not usuario:
+            print(f"✗ Usuario no encontrado: {usuario_id}")
+            return None
+        
+        if not material:
+            print(f"✗ Material no encontrado: {material_id}")
+            return None
+        
+        if material.disponible:
+            print(f"✗ El material está disponible, no necesita reserva")
+            return None
+        
+        # Verificar si ya tiene una reserva activa para este material
+        for reserva in usuario._reservas:
+            if reserva._material == material and reserva.activa:
+                print(f"✗ Ya tienes una reserva activa para este material")
+                return None
+        
+        reserva = Reserva(usuario, material)
+        self._reservas.append(reserva)
+        material._reservas.append(reserva)
+        usuario._reservas.append(reserva)
+        
+        print(f"✓ Reserva creada: {material.titulo} → {usuario.nombre_completo}")
+        return reserva
+    
+    def cancelar_reserva(self, reserva_id: int) -> bool:
+        """Cancela una reserva"""
+        reserva = None
+        for r in self._reservas:
+            if r.id == reserva_id:
+                reserva = r
+                break
+        
+        if not reserva:
+            print(f"✗ Reserva no encontrada: {reserva_id}")
+            return False
+        
+        if not reserva.activa:
+            print(f"✗ La reserva ya está cancelada")
+            return False
+        
+        reserva.cancelar()
+        print(f"✓ Reserva cancelada: {reserva._material.titulo}")
+        return True
+    
+    def procesar_reservas_material(self, material: MaterialBibliografico):
+        """Notifica a los usuarios con reservas cuando un material está disponible"""
+        if not material.disponible:
+            return
+        
+        # Buscar reservas activas para este material
+        reservas_activas = [r for r in material._reservas if r.activa]
+        
+        if reservas_activas:
+            # Notificar al primer usuario en la cola
+            primera_reserva = min(reservas_activas, key=lambda r: r._fecha_reserva)
+            primera_reserva.notificar_disponibilidad()
+            print(f"  📬 Notificación enviada a: {primera_reserva._usuario.nombre_completo}")
+    
+    def listar_reservas_activas(self) -> List[Reserva]:
+        """Lista todas las reservas activas"""
+        return [r for r in self._reservas if r.activa]
+    
     def generar_reporte(self) -> str:
         """Genera un reporte del estado de la biblioteca"""
         disponibles = len(self.listar_materiales_disponibles())
         prestados = self.total_materiales - disponibles
         prestamos_activos = len(self.listar_prestamos_activos())
         prestamos_vencidos = len(self.listar_prestamos_vencidos())
+        reservas_activas = len(self.listar_reservas_activas())
         total_multas = sum(u.get_multas() for u in self._usuarios)
         
         reporte = f"""
@@ -509,6 +646,7 @@ ESTADÍSTICAS:
 - Total de usuarios: {self.total_usuarios}
 - Préstamos activos: {prestamos_activos}
   ⚠️ Vencidos: {prestamos_vencidos}
+- Reservas activas: {reservas_activas}
 - Multas pendientes: ${total_multas:.2f}
 {'='*60}
 """
@@ -708,3 +846,150 @@ if __name__ == "__main__":
     print("  - Control de préstamos vencidos")
     print("  - Suspensión automática por multas altas")
     print("  - Historial de préstamos por usuario")
+    
+    # ============== COMMIT 3: RESERVAS Y ESTADÍSTICAS ==============
+    print("\n" + "="*60)
+    print("COMMIT 3: SISTEMA DE RESERVAS Y ESTADÍSTICAS")
+    print("="*60)
+    
+    # Crear reservas para libros prestados
+    print("\n--- CREANDO RESERVAS ---")
+    reserva1 = biblioteca.crear_reserva("87654321", libro3.id)  # libro3 no está prestado ya
+    reserva2 = biblioteca.crear_reserva("12345678", libro2.id)  # libro2 sí está prestado
+    
+    # Intentar reservar un libro disponible
+    print("\n--- INTENTANDO RESERVAR LIBRO DISPONIBLE ---")
+    biblioteca.crear_reserva("11223344", libro1.id)
+    
+    # Prestar más libros para tener más estadísticas
+    print("\n--- MÁS PRÉSTAMOS PARA ESTADÍSTICAS ---")
+    biblioteca.prestar_material("12345678", libro3.id, 14)
+    biblioteca.prestar_material("87654321", revista1.id, 7)
+    
+    # Crear reserva para libro prestado
+    print("\n--- RESERVANDO LIBRO PRESTADO ---")
+    reserva3 = biblioteca.crear_reserva("11223344", libro3.id)
+    
+    # Listar reservas activas
+    print("\n--- RESERVAS ACTIVAS ---")
+    for reserva in biblioteca.listar_reservas_activas():
+        print(f"  {reserva}")
+    
+    # Cancelar una reserva
+    if reserva3:
+        print("\n--- CANCELANDO RESERVA ---")
+        biblioteca.cancelar_reserva(reserva3.id)
+    
+    # Devolver libro con reservas y verificar notificaciones
+    print("\n--- DEVOLVIENDO LIBRO CON RESERVAS ---")
+    prestamo_libro2 = None
+    for p in biblioteca._prestamos:
+        if p._material == libro2 and p._activo:
+            prestamo_libro2 = p
+            break
+    
+    if prestamo_libro2:
+        biblioteca.devolver_material(prestamo_libro2.id)
+    
+    # Ver notificaciones del usuario con reserva
+    print("\n--- NOTIFICACIONES DE USUARIOS ---")
+    juan = biblioteca.buscar_usuario_por_id("12345678")
+    if juan:
+        notificaciones = juan.ver_notificaciones()
+        if notificaciones:
+            print(f"  Notificaciones de {juan.nombre_completo}:")
+            for notif in notificaciones:
+                print(f"    {notif}")
+        else:
+            print(f"  {juan.nombre_completo} no tiene notificaciones")
+    
+    # Simular más actividad para estadísticas
+    print("\n--- SIMULANDO MÁS ACTIVIDAD ---")
+    libro1.agregar_calificacion(5)
+    libro4.agregar_calificacion(5)
+    libro4.agregar_calificacion(4)
+    
+    # Más préstamos y devoluciones
+    p_temp = biblioteca.prestar_material("87654321", libro1.id, 7)
+    if p_temp:
+        biblioteca.devolver_material(p_temp.id)
+    
+    p_temp2 = biblioteca.prestar_material("87654321", libro1.id, 7)
+    if p_temp2:
+        biblioteca.devolver_material(p_temp2.id)
+    
+    # Mostrar estadísticas de libros más populares
+    print("\n--- LIBROS MÁS POPULARES ---")
+    populares = biblioteca.obtener_libros_mas_populares(5)
+    for i, (titulo, prestamos) in enumerate(populares, 1):
+        print(f"  {i}. {titulo} - {prestamos} préstamos")
+    
+    # Mostrar usuarios más activos
+    print("\n--- USUARIOS MÁS ACTIVOS ---")
+    activos = biblioteca.obtener_usuarios_mas_activos(3)
+    for i, (nombre, prestamos) in enumerate(activos, 1):
+        print(f"  {i}. {nombre} - {prestamos} préstamos completados")
+    
+    # Estadísticas por género
+    print("\n--- ESTADÍSTICAS POR GÉNERO ---")
+    stats_generos = biblioteca.obtener_estadisticas_generos()
+    for genero, stats in sorted(stats_generos.items(), key=lambda x: x[1]['total_prestamos'], reverse=True):
+        print(f"  📚 {genero}:")
+        print(f"     - Libros en catálogo: {stats['total_libros']}")
+        print(f"     - Total préstamos: {stats['total_prestamos']}")
+    
+    # Tasa de ocupación
+    print("\n--- TASA DE OCUPACIÓN ---")
+    tasa = biblioteca.obtener_tasa_ocupacion()
+    print(f"  📊 {tasa:.1f}% de los materiales están prestados")
+    
+    # Estado actual de todos los materiales
+    print("\n--- ESTADO DEL CATÁLOGO ---")
+    for material in biblioteca._catalogo:
+        print(f"  {material}")
+        if material._reservas:
+            reservas_activas = [r for r in material._reservas if r.activa]
+            if reservas_activas:
+                print(f"    🔖 {len(reservas_activas)} reserva(s) activa(s)")
+    
+    # Estado de usuarios
+    print("\n--- ESTADO DE USUARIOS ---")
+    for usuario in biblioteca._usuarios:
+        print(f"  {usuario}")
+        if usuario._reservas:
+            reservas_activas = [r for r in usuario._reservas if r.activa]
+            if reservas_activas:
+                print(f"    🔖 {len(reservas_activas)} reserva(s) activa(s)")
+        if usuario._notificaciones:
+            print(f"    📬 {len(usuario._notificaciones)} notificación(es)")
+    
+    # Reporte de estadísticas completo
+    print(biblioteca.generar_reporte_estadisticas())
+    
+    # Reporte general final
+    print(biblioteca.generar_reporte())
+    
+    print("\n✓ COMMIT 3 COMPLETADO - Sistema de reservas y estadísticas")
+    print("  - Clase Reserva para gestión de cola de espera")
+    print("  - Sistema de notificaciones a usuarios")
+    print("  - Notificación automática cuando material reservado está disponible")
+    print("  - Estadísticas de libros más populares")
+    print("  - Ranking de usuarios más activos")
+    print("  - Estadísticas por género literario")
+    print("  - Cálculo de tasa de ocupación")
+    print("  - Reportes detallados de estadísticas")
+    print("\n" + "="*60)
+    print("🎉 SISTEMA COMPLETO - TODOS LOS COMMITS FINALIZADOS")
+    print("="*60)
+    print("\nFuncionalidades implementadas:")
+    print("  ✓ Herencia multinivel (Persona → Usuario)")
+    print("  ✓ Composición (Biblioteca contiene múltiples clases)")
+    print("  ✓ Encapsulación con properties")
+    print("  ✓ Polimorfismo con métodos especiales")
+    print("  ✓ Sistema completo de préstamos y devoluciones")
+    print("  ✓ Gestión de multas automáticas")
+    print("  ✓ Sistema de reservas con cola de espera")
+    print("  ✓ Notificaciones a usuarios")
+    print("  ✓ Estadísticas y reportes avanzados")
+    print("  ✓ Control de fechas y vencimientos")
+    print("  ✓ Validaciones y manejo de errores")
