@@ -1,6 +1,7 @@
 """
 Sistema de Gestión de Biblioteca Digital
 Commit 1: Clases base con herencia, encapsulación y polimorfismo
+Commit 2: Sistema de préstamos, devoluciones y multas
 """
 
 from datetime import datetime, timedelta
@@ -44,6 +45,8 @@ class Usuario(Persona):
         self._libros_prestados: List['Libro'] = []
         self._historial: List[dict] = []
         self._activo = True
+        self._multas_pendientes: float = 0.0
+        self._prestamos_activos: List['Prestamo'] = []
         
         # Límites según tipo de usuario
         self._limite_prestamos = {
@@ -76,7 +79,29 @@ class Usuario(Persona):
     
     def puede_prestar(self) -> bool:
         """Verifica si el usuario puede recibir más préstamos"""
-        return self._activo and len(self._libros_prestados) < self.limite_actual
+        return self._activo and len(self._libros_prestados) < self.limite_actual and self._multas_pendientes == 0
+    
+    def agregar_multa(self, monto: float):
+        """Agrega una multa al usuario"""
+        self._multas_pendientes += monto
+        if self._multas_pendientes > 50:
+            self.suspender()
+    
+    def pagar_multa(self, monto: float) -> float:
+        """Paga multas pendientes y retorna el cambio"""
+        if monto >= self._multas_pendientes:
+            cambio = monto - self._multas_pendientes
+            self._multas_pendientes = 0.0
+            if not self._prestamos_activos:  # Si no hay préstamos activos, reactivar
+                self.activar()
+            return cambio
+        else:
+            self._multas_pendientes -= monto
+            return 0.0
+    
+    def get_multas(self) -> float:
+        """Retorna el monto de multas pendientes"""
+        return self._multas_pendientes
     
     def suspender(self):
         """Suspende la cuenta del usuario"""
@@ -88,7 +113,8 @@ class Usuario(Persona):
     
     def __str__(self) -> str:
         estado = "Activo" if self._activo else "Suspendido"
-        return f"{self.nombre_completo} - {self._tipo.capitalize()} ({estado}) - Libros: {len(self._libros_prestados)}/{self.limite_actual}"
+        multas_texto = f" - Multas: ${self._multas_pendientes:.2f}" if self._multas_pendientes > 0 else ""
+        return f"{self.nombre_completo} - {self._tipo.capitalize()} ({estado}) - Libros: {len(self._libros_prestados)}/{self.limite_actual}{multas_texto}"
 
 
 class MaterialBibliografico:
@@ -217,6 +243,82 @@ class Revista(MaterialBibliografico):
         return f"{estado} [{self._id}] {self._titulo} - Nº{self._numero} ({self._mes}/{self._año})"
 
 
+class Prestamo:
+    """Gestión de préstamos individuales"""
+    
+    _id_counter = 5000
+    
+    def __init__(self, usuario: Usuario, material: MaterialBibliografico, dias_prestamo: int = 14):
+        Prestamo._id_counter += 1
+        self._id = Prestamo._id_counter
+        self._usuario = usuario
+        self._material = material
+        self._fecha_prestamo = datetime.now()
+        self._dias_prestamo = dias_prestamo
+        self._fecha_devolucion_esperada = self._fecha_prestamo + timedelta(days=dias_prestamo)
+        self._fecha_devolucion_real: Optional[datetime] = None
+        self._multa_generada: float = 0.0
+        self._activo = True
+    
+    @property
+    def id(self) -> int:
+        return self._id
+    
+    @property
+    def esta_vencido(self) -> bool:
+        """Verifica si el préstamo está vencido"""
+        if self._activo:
+            return datetime.now() > self._fecha_devolucion_esperada
+        return False
+    
+    @property
+    def dias_retraso(self) -> int:
+        """Calcula los días de retraso"""
+        if self._activo:
+            if datetime.now() > self._fecha_devolucion_esperada:
+                return (datetime.now() - self._fecha_devolucion_esperada).days
+        elif self._fecha_devolucion_real:
+            if self._fecha_devolucion_real > self._fecha_devolucion_esperada:
+                return (self._fecha_devolucion_real - self._fecha_devolucion_esperada).days
+        return 0
+    
+    def calcular_multa(self, tarifa_por_dia: float = 2.0) -> float:
+        """Calcula la multa por retraso"""
+        return self.dias_retraso * tarifa_por_dia
+    
+    def devolver(self) -> float:
+        """Marca el préstamo como devuelto y calcula la multa"""
+        self._fecha_devolucion_real = datetime.now()
+        self._activo = False
+        self._multa_generada = self.calcular_multa()
+        return self._multa_generada
+    
+    def renovar(self, dias_adicionales: int = 7) -> bool:
+        """Renueva el préstamo si no está vencido"""
+        if not self.esta_vencido and self._activo:
+            self._fecha_devolucion_esperada += timedelta(days=dias_adicionales)
+            return True
+        return False
+    
+    def get_info(self) -> dict:
+        """Retorna información del préstamo"""
+        return {
+            "id": self._id,
+            "usuario": self._usuario.nombre_completo,
+            "material": self._material.titulo,
+            "fecha_prestamo": self._fecha_prestamo.strftime("%d/%m/%Y"),
+            "fecha_devolucion": self._fecha_devolucion_esperada.strftime("%d/%m/%Y"),
+            "activo": self._activo,
+            "dias_retraso": self.dias_retraso,
+            "multa": self._multa_generada
+        }
+    
+    def __str__(self) -> str:
+        estado = "📖 Activo" if self._activo else "✓ Devuelto"
+        vencido = " ⚠️ VENCIDO" if self.esta_vencido else ""
+        return f"[{self._id}] {estado}{vencido} - {self._material.titulo} → {self._usuario.nombre_completo}"
+
+
 class Biblioteca:
     """Sistema de gestión de la biblioteca"""
     
@@ -225,7 +327,9 @@ class Biblioteca:
         self._direccion = direccion
         self._catalogo: List[MaterialBibliografico] = []
         self._usuarios: List[Usuario] = []
+        self._prestamos: List[Prestamo] = []
         self._fecha_creacion = datetime.now()
+        self._tarifa_multa_diaria = 2.0
     
     @property
     def nombre(self) -> str:
@@ -281,10 +385,117 @@ class Biblioteca:
         """Lista todos los materiales disponibles"""
         return [m for m in self._catalogo if m.disponible]
     
+    def prestar_material(self, usuario_id: str, material_id: int, dias: int = 14) -> Optional[Prestamo]:
+        """Realiza un préstamo de material a un usuario"""
+        usuario = self.buscar_usuario_por_id(usuario_id)
+        material = self.buscar_material_por_id(material_id)
+        
+        if not usuario:
+            print(f"✗ Usuario no encontrado: {usuario_id}")
+            return None
+        
+        if not material:
+            print(f"✗ Material no encontrado: {material_id}")
+            return None
+        
+        if not usuario.puede_prestar():
+            razon = "multas pendientes" if usuario.get_multas() > 0 else "cuenta suspendida o límite alcanzado"
+            print(f"✗ El usuario no puede recibir préstamos: {razon}")
+            return None
+        
+        if not material.disponible:
+            print(f"✗ El material no está disponible: {material.titulo}")
+            return None
+        
+        # Crear préstamo
+        prestamo = Prestamo(usuario, material, dias)
+        self._prestamos.append(prestamo)
+        
+        # Actualizar estados
+        material.marcar_prestado()
+        usuario._libros_prestados.append(material)
+        usuario._prestamos_activos.append(prestamo)
+        
+        print(f"✓ Préstamo realizado: {material.titulo} → {usuario.nombre_completo}")
+        print(f"  Fecha de devolución: {prestamo._fecha_devolucion_esperada.strftime('%d/%m/%Y')}")
+        return prestamo
+    
+    def devolver_material(self, prestamo_id: int) -> bool:
+        """Procesa la devolución de un material"""
+        prestamo = None
+        for p in self._prestamos:
+            if p.id == prestamo_id and p._activo:
+                prestamo = p
+                break
+        
+        if not prestamo:
+            print(f"✗ Préstamo no encontrado o ya devuelto: {prestamo_id}")
+            return False
+        
+        # Marcar como devuelto
+        multa = prestamo.devolver()
+        
+        # Actualizar estados
+        prestamo._material.marcar_devuelto()
+        prestamo._usuario._libros_prestados.remove(prestamo._material)
+        prestamo._usuario._prestamos_activos.remove(prestamo)
+        
+        # Registrar en historial
+        prestamo._usuario._historial.append(prestamo.get_info())
+        
+        # Aplicar multa si hay
+        if multa > 0:
+            prestamo._usuario.agregar_multa(multa)
+            print(f"⚠️  Devolución con retraso de {prestamo.dias_retraso} días")
+            print(f"   Multa generada: ${multa:.2f}")
+        else:
+            print(f"✓ Devolución a tiempo")
+        
+        print(f"✓ Material devuelto: {prestamo._material.titulo}")
+        return True
+    
+    def renovar_prestamo(self, prestamo_id: int, dias: int = 7) -> bool:
+        """Renueva un préstamo existente"""
+        prestamo = None
+        for p in self._prestamos:
+            if p.id == prestamo_id:
+                prestamo = p
+                break
+        
+        if not prestamo:
+            print(f"✗ Préstamo no encontrado: {prestamo_id}")
+            return False
+        
+        if prestamo.renovar(dias):
+            print(f"✓ Préstamo renovado por {dias} días más")
+            print(f"  Nueva fecha de devolución: {prestamo._fecha_devolucion_esperada.strftime('%d/%m/%Y')}")
+            return True
+        else:
+            print(f"✗ No se puede renovar: préstamo vencido o ya devuelto")
+            return False
+    
+    def listar_prestamos_activos(self) -> List[Prestamo]:
+        """Lista todos los préstamos activos"""
+        return [p for p in self._prestamos if p._activo]
+    
+    def listar_prestamos_vencidos(self) -> List[Prestamo]:
+        """Lista todos los préstamos vencidos"""
+        return [p for p in self._prestamos if p._activo and p.esta_vencido]
+    
+    def buscar_prestamo_por_id(self, prestamo_id: int) -> Optional[Prestamo]:
+        """Busca un préstamo por su ID"""
+        for prestamo in self._prestamos:
+            if prestamo.id == prestamo_id:
+                return prestamo
+        return None
+    
     def generar_reporte(self) -> str:
         """Genera un reporte del estado de la biblioteca"""
         disponibles = len(self.listar_materiales_disponibles())
         prestados = self.total_materiales - disponibles
+        prestamos_activos = len(self.listar_prestamos_activos())
+        prestamos_vencidos = len(self.listar_prestamos_vencidos())
+        total_multas = sum(u.get_multas() for u in self._usuarios)
         
         reporte = f"""
 {'='*60}
@@ -296,6 +507,9 @@ ESTADÍSTICAS:
   ✓ Disponibles: {disponibles}
   ✗ Prestados: {prestados}
 - Total de usuarios: {self.total_usuarios}
+- Préstamos activos: {prestamos_activos}
+  ⚠️ Vencidos: {prestamos_vencidos}
+- Multas pendientes: ${total_multas:.2f}
 {'='*60}
 """
         return reporte
@@ -304,10 +518,11 @@ ESTADÍSTICAS:
         return f"Biblioteca {self._nombre} - {self.total_materiales} materiales, {self.total_usuarios} usuarios"
 
 
-# Demostración del sistema (Commit 1)
+# Demostración del sistema
 if __name__ == "__main__":
     print("="*60)
-    print("SISTEMA DE GESTIÓN DE BIBLIOTECA DIGITAL - COMMIT 1")
+    print("SISTEMA DE GESTIÓN DE BIBLIOTECA DIGITAL - COMMIT 2")
+    print("Sistema de Préstamos y Devoluciones")
     print("="*60)
     
     # Crear biblioteca
@@ -385,11 +600,111 @@ if __name__ == "__main__":
     usuario1.tipo = "premium"
     print(f"Después: {usuario1}")
     
-    # Generar reporte
+    # Generar reporte inicial
     print(biblioteca.generar_reporte())
     
-    print("\n✓ COMMIT 1 COMPLETADO - Clases base implementadas")
-    print("  - Herencia: Persona → Usuario, MaterialBibliografico → Libro/Revista")
-    print("  - Encapsulación: Atributos privados con properties")
-    print("  - Polimorfismo: Métodos __str__ personalizados")
-    print("  - Composición: Biblioteca contiene Materiales y Usuarios")
+    # ============== COMMIT 2: SISTEMA DE PRÉSTAMOS ==============
+    print("\n" + "="*60)
+    print("COMMIT 2: SISTEMA DE PRÉSTAMOS Y DEVOLUCIONES")
+    print("="*60)
+    
+    # Realizar préstamos
+    print("\n--- REALIZANDO PRÉSTAMOS ---")
+    prestamo1 = biblioteca.prestar_material("12345678", libro1.id, 14)
+    prestamo2 = biblioteca.prestar_material("87654321", libro2.id, 14)
+    prestamo3 = biblioteca.prestar_material("11223344", libro3.id, 7)
+    
+    # Intentar préstamo de libro no disponible
+    print("\n--- INTENTANDO PRÉSTAMO DE LIBRO YA PRESTADO ---")
+    biblioteca.prestar_material("87654321", libro1.id, 14)
+    
+    # Mostrar préstamos activos
+    print("\n--- PRÉSTAMOS ACTIVOS ---")
+    for prestamo in biblioteca.listar_prestamos_activos():
+        print(f"  {prestamo}")
+        info = prestamo.get_info()
+        print(f"    Devolución esperada: {info['fecha_devolucion']}")
+    
+    # Simular paso del tiempo y crear préstamo vencido
+    print("\n--- SIMULANDO PRÉSTAMO VENCIDO ---")
+    if prestamo3:
+        # Modificar fecha para simular vencimiento
+        prestamo3._fecha_devolucion_esperada = datetime.now() - timedelta(days=5)
+        print(f"  {prestamo3}")
+        print(f"  Días de retraso: {prestamo3.dias_retraso}")
+        print(f"  Multa calculada: ${prestamo3.calcular_multa():.2f}")
+    
+    # Renovar un préstamo
+    print("\n--- RENOVANDO PRÉSTAMO ---")
+    if prestamo1:
+        biblioteca.renovar_prestamo(prestamo1.id, 7)
+    
+    # Devolver materiales
+    print("\n--- DEVOLVIENDO MATERIALES ---")
+    if prestamo1:
+        biblioteca.devolver_material(prestamo1.id)
+    
+    print("\n--- DEVOLVIENDO MATERIAL CON RETRASO ---")
+    if prestamo3:
+        biblioteca.devolver_material(prestamo3.id)
+    
+    # Mostrar estado de usuarios con multas
+    print("\n--- ESTADO DE USUARIOS ---")
+    for usuario in biblioteca._usuarios:
+        print(f"  {usuario}")
+        if usuario.get_multas() > 0:
+            print(f"    ⚠️ Multas pendientes: ${usuario.get_multas():.2f}")
+    
+    # Intentar préstamo con multas pendientes
+    print("\n--- INTENTANDO PRÉSTAMO CON MULTAS PENDIENTES ---")
+    biblioteca.prestar_material("11223344", libro4.id, 14)
+    
+    # Pagar multas
+    print("\n--- PAGANDO MULTAS ---")
+    carlos = biblioteca.buscar_usuario_por_id("11223344")
+    if carlos and carlos.get_multas() > 0:
+        multa = carlos.get_multas()
+        print(f"  Multa de {carlos.nombre_completo}: ${multa:.2f}")
+        cambio = carlos.pagar_multa(20.0)
+        print(f"  Pago realizado: $20.00")
+        print(f"  Cambio: ${cambio:.2f}")
+        print(f"  ✓ Cuenta reactivada")
+    
+    # Ahora sí puede prestar
+    print("\n--- PRÉSTAMO DESPUÉS DE PAGAR MULTAS ---")
+    prestamo4 = biblioteca.prestar_material("11223344", libro4.id, 14)
+    
+    # Listar préstamos vencidos
+    print("\n--- PRÉSTAMOS VENCIDOS ---")
+    vencidos = biblioteca.listar_prestamos_vencidos()
+    if vencidos:
+        for prestamo in vencidos:
+            print(f"  {prestamo}")
+    else:
+        print("  ✓ No hay préstamos vencidos")
+    
+    # Ver historial de un usuario
+    print("\n--- HISTORIAL DE PRÉSTAMOS ---")
+    if carlos and carlos._historial:
+        print(f"  Usuario: {carlos.nombre_completo}")
+        for registro in carlos._historial:
+            print(f"    - {registro['material']} (Devuelto: {registro['fecha_devolucion']})")
+            if registro['multa'] > 0:
+                print(f"      Multa: ${registro['multa']:.2f}")
+    
+    # Catálogo actualizado
+    print("\n--- CATÁLOGO ACTUALIZADO ---")
+    for material in biblioteca._catalogo:
+        print(f"  {material}")
+    
+    # Reporte final
+    print(biblioteca.generar_reporte())
+    
+    print("\n✓ COMMIT 2 COMPLETADO - Sistema de préstamos y devoluciones")
+    print("  - Clase Prestamo con gestión de fechas y multas")
+    print("  - Métodos prestar_material() y devolver_material()")
+    print("  - Sistema de multas automáticas por retraso")
+    print("  - Renovación de préstamos")
+    print("  - Control de préstamos vencidos")
+    print("  - Suspensión automática por multas altas")
+    print("  - Historial de préstamos por usuario")
