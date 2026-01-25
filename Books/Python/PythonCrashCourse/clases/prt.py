@@ -3,6 +3,7 @@ Sistema de Gestión de Biblioteca Digital
 Commit 1: Clases base con herencia, encapsulación y polimorfismo
 Commit 2: Sistema de préstamos, devoluciones y multas
 Commit 3: Sistema de reservas, estadísticas y notificaciones
+Commit 4: Sistema de búsqueda avanzada y exportación de reportes
 """
 
 from datetime import datetime, timedelta
@@ -993,3 +994,302 @@ if __name__ == "__main__":
     print("  ✓ Estadísticas y reportes avanzados")
     print("  ✓ Control de fechas y vencimientos")
     print("  ✓ Validaciones y manejo de errores")
+
+
+# ============================================================
+# COMMIT 4: SISTEMA DE BÚSQUEDA AVANZADA Y EXPORTACIÓN
+# ============================================================
+
+class SistemaBusqueda:
+    """Sistema de búsqueda avanzada de materiales bibliográficos"""
+    
+    def __init__(self, biblioteca: 'Biblioteca'):
+        self._biblioteca = biblioteca
+    
+    def buscar_por_titulo(self, termino: str) -> List[MaterialBibliografico]:
+        """Busca materiales por título (búsqueda parcial, case-insensitive)"""
+        termino = termino.lower()
+        resultados = []
+        for material in self._biblioteca._catalogo:
+            if termino in material._titulo.lower():
+                resultados.append(material)
+        return resultados
+    
+    def buscar_por_autor(self, autor: str) -> List[MaterialBibliografico]:
+        """Busca materiales por autor (búsqueda parcial, case-insensitive)"""
+        autor = autor.lower()
+        resultados = []
+        for material in self._biblioteca._catalogo:
+            if autor in material._autor.lower():
+                resultados.append(material)
+        return resultados
+    
+    def buscar_por_año(self, año_min: int, año_max: Optional[int] = None) -> List[MaterialBibliografico]:
+        """Busca materiales por rango de años"""
+        if año_max is None:
+            año_max = año_min
+        resultados = []
+        for material in self._biblioteca._catalogo:
+            if año_min <= material._año <= año_max:
+                resultados.append(material)
+        return resultados
+    
+    def buscar_por_genero(self, genero: str) -> List['Libro']:
+        """Busca libros por género"""
+        genero = genero.lower()
+        resultados = []
+        for material in self._biblioteca._catalogo:
+            if isinstance(material, Libro) and material._genero.lower() == genero:
+                resultados.append(material)
+        return resultados
+    
+    def buscar_disponibles(self) -> List[MaterialBibliografico]:
+        """Retorna todos los materiales disponibles"""
+        return [m for m in self._biblioteca._catalogo if m._disponible]
+    
+    def buscar_mas_populares(self, limite: int = 5) -> List[MaterialBibliografico]:
+        """Retorna los materiales más prestados"""
+        return sorted(self._biblioteca._catalogo, 
+                     key=lambda m: m._veces_prestado, 
+                     reverse=True)[:limite]
+    
+    def buscar_avanzada(self, **criterios) -> List[MaterialBibliografico]:
+        """
+        Búsqueda avanzada con múltiples criterios
+        Criterios aceptados: titulo, autor, genero, año_min, año_max, disponible
+        """
+        resultados = self._biblioteca._catalogo.copy()
+        
+        if 'titulo' in criterios:
+            termino = criterios['titulo'].lower()
+            resultados = [m for m in resultados if termino in m._titulo.lower()]
+        
+        if 'autor' in criterios:
+            autor = criterios['autor'].lower()
+            resultados = [m for m in resultados if autor in m._autor.lower()]
+        
+        if 'genero' in criterios:
+            genero = criterios['genero'].lower()
+            resultados = [m for m in resultados 
+                         if isinstance(m, Libro) and m._genero.lower() == genero]
+        
+        if 'año_min' in criterios:
+            resultados = [m for m in resultados if m._año >= criterios['año_min']]
+        
+        if 'año_max' in criterios:
+            resultados = [m for m in resultados if m._año <= criterios['año_max']]
+        
+        if 'disponible' in criterios:
+            resultados = [m for m in resultados if m._disponible == criterios['disponible']]
+        
+        return resultados
+
+
+class ExportadorReportes:
+    """Clase para exportar reportes a diferentes formatos"""
+    
+    def __init__(self, biblioteca: 'Biblioteca'):
+        self._biblioteca = biblioteca
+    
+    def generar_reporte_csv(self, nombre_archivo: str = "catalogo.csv"):
+        """Genera un reporte CSV del catálogo"""
+        try:
+            with open(nombre_archivo, 'w', encoding='utf-8') as f:
+                # Encabezado
+                f.write("ID,Tipo,Titulo,Autor,Año,Editorial,Genero,ISBN,Disponible,Veces Prestado\n")
+                
+                # Datos
+                for material in self._biblioteca._catalogo:
+                    tipo = "Libro" if isinstance(material, Libro) else "Material"
+                    genero = material._genero if isinstance(material, Libro) else "N/A"
+                    isbn = material._isbn if isinstance(material, Libro) else "N/A"
+                    disponible = "Sí" if material._disponible else "No"
+                    
+                    f.write(f"{material._id},{tipo},\"{material._titulo}\",\"{material._autor}\","
+                           f"{material._año},\"{material._editorial}\",\"{genero}\",{isbn},"
+                           f"{disponible},{material._veces_prestado}\n")
+            
+            return f"✓ Reporte CSV generado: {nombre_archivo}"
+        except Exception as e:
+            return f"✗ Error al generar CSV: {str(e)}"
+    
+    def generar_reporte_usuarios(self, nombre_archivo: str = "usuarios.txt"):
+        """Genera un reporte detallado de usuarios"""
+        try:
+            with open(nombre_archivo, 'w', encoding='utf-8') as f:
+                f.write("=" * 60 + "\n")
+                f.write("REPORTE DE USUARIOS - BIBLIOTECA DIGITAL\n")
+                f.write(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+                f.write("=" * 60 + "\n\n")
+                
+                for usuario in self._biblioteca._usuarios:
+                    f.write(f"Usuario: {usuario.nombre_completo}\n")
+                    f.write(f"  ID: {usuario._identificacion}\n")
+                    f.write(f"  Tipo: {usuario._tipo.capitalize()}\n")
+                    f.write(f"  Email: {usuario._email}\n")
+                    f.write(f"  Estado: {'Activo' if usuario._activo else 'Suspendido'}\n")
+                    f.write(f"  Libros prestados: {len(usuario._libros_prestados)}/{usuario.limite_actual}\n")
+                    f.write(f"  Multas pendientes: ${usuario._multas_pendientes:.2f}\n")
+                    f.write(f"  Préstamos históricos: {len(usuario._historial)}\n")
+                    f.write(f"  Reservas activas: {len([r for r in usuario._reservas if r.activa])}\n")
+                    f.write("-" * 60 + "\n")
+            
+            return f"✓ Reporte de usuarios generado: {nombre_archivo}"
+        except Exception as e:
+            return f"✗ Error al generar reporte: {str(e)}"
+    
+    def generar_reporte_prestamos_activos(self, nombre_archivo: str = "prestamos_activos.txt"):
+        """Genera un reporte de préstamos activos y vencidos"""
+        try:
+            with open(nombre_archivo, 'w', encoding='utf-8') as f:
+                f.write("=" * 60 + "\n")
+                f.write("PRÉSTAMOS ACTIVOS - BIBLIOTECA DIGITAL\n")
+                f.write(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
+                f.write("=" * 60 + "\n\n")
+                
+                prestamos_activos = [p for p in self._biblioteca._prestamos if p._activo]
+                
+                if not prestamos_activos:
+                    f.write("No hay préstamos activos.\n")
+                else:
+                    # Préstamos vigentes
+                    vigentes = [p for p in prestamos_activos if not p.esta_vencido()]
+                    if vigentes:
+                        f.write(f"\nPRÉSTAMOS VIGENTES ({len(vigentes)}):\n")
+                        f.write("-" * 60 + "\n")
+                        for p in vigentes:
+                            dias = (p._fecha_vencimiento - datetime.now()).days
+                            f.write(f"  📗 {p._material._titulo}\n")
+                            f.write(f"     Usuario: {p._usuario.nombre_completo}\n")
+                            f.write(f"     Vence: {p._fecha_vencimiento.strftime('%d/%m/%Y')} ({dias} días)\n\n")
+                    
+                    # Préstamos vencidos
+                    vencidos = [p for p in prestamos_activos if p.esta_vencido()]
+                    if vencidos:
+                        f.write(f"\nPRÉSTAMOS VENCIDOS ({len(vencidos)}):\n")
+                        f.write("-" * 60 + "\n")
+                        for p in vencidos:
+                            dias = p.dias_vencidos()
+                            multa = p.calcular_multa()
+                            f.write(f"  ⚠️ {p._material._titulo}\n")
+                            f.write(f"     Usuario: {p._usuario.nombre_completo}\n")
+                            f.write(f"     Vencido hace: {dias} días\n")
+                            f.write(f"     Multa acumulada: ${multa:.2f}\n\n")
+            
+            return f"✓ Reporte de préstamos generado: {nombre_archivo}"
+        except Exception as e:
+            return f"✗ Error al generar reporte: {str(e)}"
+
+
+if __name__ == "__main__":
+    # Demostración del Commit 4
+    print("\n" + "="*60)
+    print("COMMIT 4: BÚSQUEDA AVANZADA Y EXPORTACIÓN DE REPORTES")
+    print("="*60 + "\n")
+    
+    # Usar la biblioteca ya creada en los commits anteriores
+    biblioteca = Biblioteca("Biblioteca Central", "Calle Principal 123")
+    
+    # Agregar materiales
+    libro1 = Libro("Cien Años de Soledad", "Gabriel García Márquez", 1967, 
+                   "Sudamericana", "978-0307474728", "Realismo Mágico", 417)
+    libro2 = Libro("El Código Da Vinci", "Dan Brown", 2003,
+                   "Doubleday", "978-0307474278", "Thriller", 689)
+    libro3 = Libro("Harry Potter y la Piedra Filosofal", "J.K. Rowling", 1997,
+                   "Bloomsbury", "978-0439708180", "Fantasía", 309)
+    libro4 = Libro("1984", "George Orwell", 1949,
+                   "Secker & Warburg", "978-0451524935", "Distopía", 328)
+    libro5 = Libro("Orgullo y Prejuicio", "Jane Austen", 1813,
+                   "T. Egerton", "978-0141439518", "Romance", 432)
+    
+    for libro in [libro1, libro2, libro3, libro4, libro5]:
+        biblioteca.agregar_material(libro)
+    
+    # Agregar usuarios
+    usuario1 = Usuario("Ana", "García", "001", "ana@email.com", "premium")
+    usuario2 = Usuario("Carlos", "López", "002", "carlos@email.com", "estudiante")
+    usuario3 = Usuario("María", "Rodríguez", "003", "maria@email.com", "regular")
+    
+    for usuario in [usuario1, usuario2, usuario3]:
+        biblioteca.registrar_usuario(usuario)
+    
+    # Realizar algunos préstamos
+    biblioteca.prestar_libro(libro1, usuario1)
+    biblioteca.prestar_libro(libro2, usuario2)
+    biblioteca.prestar_libro(libro3, usuario3)
+    
+    # === DEMOSTRACIÓN DEL SISTEMA DE BÚSQUEDA ===
+    print("\n--- SISTEMA DE BÚSQUEDA AVANZADA ---\n")
+    
+    buscador = SistemaBusqueda(biblioteca)
+    
+    # Búsqueda por título
+    print("🔍 Búsqueda por título 'Harry':")
+    resultados = buscador.buscar_por_titulo("Harry")
+    for libro in resultados:
+        print(f"  ✓ {libro._titulo} ({libro._año})")
+    
+    # Búsqueda por autor
+    print("\n🔍 Búsqueda por autor 'Orwell':")
+    resultados = buscador.buscar_por_autor("Orwell")
+    for libro in resultados:
+        print(f"  ✓ {libro._titulo} - {libro._autor}")
+    
+    # Búsqueda por género
+    print("\n🔍 Búsqueda por género 'Fantasía':")
+    resultados = buscador.buscar_por_genero("Fantasía")
+    for libro in resultados:
+        print(f"  ✓ {libro._titulo} - {libro._genero}")
+    
+    # Búsqueda por rango de años
+    print("\n🔍 Libros publicados entre 1900 y 2000:")
+    resultados = buscador.buscar_por_año(1900, 2000)
+    for libro in resultados:
+        print(f"  ✓ {libro._titulo} ({libro._año})")
+    
+    # Búsqueda de disponibles
+    print("\n🔍 Materiales disponibles:")
+    resultados = buscador.buscar_disponibles()
+    for material in resultados:
+        print(f"  ✓ {material._titulo}")
+    
+    # Búsqueda avanzada
+    print("\n🔍 Búsqueda avanzada (Género: Romance, Disponible):")
+    resultados = buscador.buscar_avanzada(genero="Romance", disponible=True)
+    for libro in resultados:
+        print(f"  ✓ {libro._titulo} - {libro._genero}")
+    
+    # Libros más populares
+    print("\n🔍 Top 3 libros más populares:")
+    resultados = buscador.buscar_mas_populares(3)
+    for i, libro in enumerate(resultados, 1):
+        print(f"  {i}. {libro._titulo} - Prestado {libro._veces_prestado} vez/veces")
+    
+    # === DEMOSTRACIÓN DE EXPORTACIÓN ===
+    print("\n--- EXPORTACIÓN DE REPORTES ---\n")
+    
+    exportador = ExportadorReportes(biblioteca)
+    
+    # Generar CSV del catálogo
+    print(exportador.generar_reporte_csv("catalogo_biblioteca.csv"))
+    
+    # Generar reporte de usuarios
+    print(exportador.generar_reporte_usuarios("reporte_usuarios.txt"))
+    
+    # Generar reporte de préstamos
+    print(exportador.generar_reporte_prestamos_activos("prestamos_activos.txt"))
+    
+    print("\n✓ COMMIT 4 COMPLETADO - Búsqueda avanzada y exportación")
+    print("  - Clase SistemaBusqueda con múltiples métodos de búsqueda")
+    print("  - Búsqueda por título, autor, año, género")
+    print("  - Búsqueda avanzada con múltiples criterios")
+    print("  - Ranking de materiales más populares")
+    print("  - Clase ExportadorReportes para generar archivos")
+    print("  - Exportación a CSV del catálogo")
+    print("  - Reportes detallados de usuarios")
+    print("  - Reportes de préstamos activos y vencidos")
+    print("  - Manejo de excepciones en exportación")
+    
+    print("\n" + "="*60)
+    print("🎉 SISTEMA DE BIBLIOTECA COMPLETO - 4 COMMITS")
+    print("="*60)
