@@ -4,6 +4,7 @@ Commit 1: Clases base con herencia, encapsulación y polimorfismo
 Commit 2: Sistema de préstamos, devoluciones y multas
 Commit 3: Sistema de reservas, estadísticas y notificaciones
 Commit 4: Sistema de búsqueda avanzada y exportación de reportes
+Commit 5: Sistema de favoritos, etiquetas y programa de fidelidad
 """
 
 from datetime import datetime, timedelta
@@ -51,6 +52,8 @@ class Usuario(Persona):
         self._prestamos_activos: List['Prestamo'] = []
         self._reservas: List['Reserva'] = []
         self._notificaciones: List[str] = []
+        self._favoritos: List['Libro'] = []
+        self._puntos_fidelidad: int = 0
         
         # Límites según tipo de usuario
         self._limite_prestamos = {
@@ -119,6 +122,32 @@ class Usuario(Persona):
     def limpiar_notificaciones(self):
         """Limpia todas las notificaciones"""
         self._notificaciones.clear()
+    
+    def agregar_favorito(self, libro: 'Libro'):
+        """Agrega un libro a favoritos"""
+        if libro not in self._favoritos:
+            self._favoritos.append(libro)
+            self.agregar_notificacion(f"📖 '{libro.titulo}' agregado a favoritos")
+    
+    def quitar_favorito(self, libro: 'Libro'):
+        """Quita un libro de favoritos"""
+        if libro in self._favoritos:
+            self._favoritos.remove(libro)
+    
+    def get_favoritos(self) -> List['Libro']:
+        """Retorna la lista de libros favoritos"""
+        return self._favoritos.copy()
+    
+    def agregar_puntos(self, puntos: int):
+        """Agrega puntos de fidelidad al usuario"""
+        self._puntos_fidelidad += puntos
+        if self._puntos_fidelidad >= 100 and self._tipo == "regular":
+            self.tipo = "premium"
+            self.agregar_notificacion("🎉 ¡Felicitaciones! Has sido promovido a usuario Premium")
+    
+    def get_puntos(self) -> int:
+        """Retorna los puntos de fidelidad acumulados"""
+        return self._puntos_fidelidad
     
     def suspender(self):
         """Suspende la cuenta del usuario"""
@@ -201,6 +230,8 @@ class Libro(MaterialBibliografico):
         self._paginas = paginas
         self._genero = genero
         self._calificaciones: List[int] = []
+        self._etiquetas: List[str] = []
+        self._descuento: float = 0.0  # Descuento en multas (0-100%)
     
     @property
     def isbn(self) -> str:
@@ -224,6 +255,31 @@ class Libro(MaterialBibliografico):
         else:
             raise ValueError("La calificación debe estar entre 1 y 5")
     
+    def agregar_etiqueta(self, etiqueta: str):
+        """Agrega una etiqueta al libro"""
+        if etiqueta not in self._etiquetas:
+            self._etiquetas.append(etiqueta.lower())
+    
+    def quitar_etiqueta(self, etiqueta: str):
+        """Quita una etiqueta del libro"""
+        if etiqueta.lower() in self._etiquetas:
+            self._etiquetas.remove(etiqueta.lower())
+    
+    def get_etiquetas(self) -> List[str]:
+        """Retorna las etiquetas del libro"""
+        return self._etiquetas.copy()
+    
+    def establecer_descuento(self, descuento: float):
+        """Establece un descuento en multas (0-100%)"""
+        if 0 <= descuento <= 100:
+            self._descuento = descuento
+        else:
+            raise ValueError("El descuento debe estar entre 0 y 100")
+    
+    def get_descuento(self) -> float:
+        """Retorna el descuento actual"""
+        return self._descuento
+    
     def get_info_completa(self) -> dict:
         """Retorna información completa del libro"""
         info = self.get_info_basica()
@@ -232,7 +288,9 @@ class Libro(MaterialBibliografico):
             "paginas": self._paginas,
             "genero": self._genero,
             "veces_prestado": self._veces_prestado,
-            "calificacion": round(self.calificacion_promedio, 2)
+            "calificacion": round(self.calificacion_promedio, 2),
+            "etiquetas": self._etiquetas,
+            "descuento": self._descuento
         })
         return info
     
