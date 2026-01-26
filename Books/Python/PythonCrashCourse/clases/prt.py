@@ -5,6 +5,7 @@ Commit 2: Sistema de préstamos, devoluciones y multas
 Commit 3: Sistema de reservas, estadísticas y notificaciones
 Commit 4: Sistema de búsqueda avanzada y exportación de reportes
 Commit 5: Sistema de favoritos, etiquetas y programa de fidelidad
+Commit 6: Sistema de reseñas, recomendaciones y clubes de lectura
 """
 
 from datetime import datetime, timedelta
@@ -149,6 +150,28 @@ class Usuario(Persona):
         """Retorna los puntos de fidelidad acumulados"""
         return self._puntos_fidelidad
     
+    def get_recomendaciones(self) -> List['Libro']:
+        """Genera recomendaciones basadas en favoritos y género"""
+        if not self._favoritos:
+            return []
+        
+        # Obtener géneros de libros favoritos
+        generos_favoritos = [libro.genero for libro in self._favoritos]
+        return generos_favoritos  # Placeholder para integración con biblioteca
+    
+    def generar_reporte_actividad(self) -> dict:
+        """Genera un reporte completo de la actividad del usuario"""
+        return {
+            "nombre": self.nombre_completo,
+            "tipo": self._tipo,
+            "puntos": self._puntos_fidelidad,
+            "libros_prestados": len(self._libros_prestados),
+            "favoritos": len(self._favoritos),
+            "multas": self._multas_pendientes,
+            "notificaciones_pendientes": len(self._notificaciones),
+            "prestamos_totales": len(self._historial)
+        }
+    
     def suspender(self):
         """Suspende la cuenta del usuario"""
         self._activo = False
@@ -232,6 +255,7 @@ class Libro(MaterialBibliografico):
         self._calificaciones: List[int] = []
         self._etiquetas: List[str] = []
         self._descuento: float = 0.0  # Descuento en multas (0-100%)
+        self._reseñas: List[dict] = []  # Lista de reseñas textuales
     
     @property
     def isbn(self) -> str:
@@ -280,6 +304,35 @@ class Libro(MaterialBibliografico):
         """Retorna el descuento actual"""
         return self._descuento
     
+    def agregar_reseña(self, usuario: 'Usuario', texto: str, calificacion: int):
+        """Agrega una reseña textual al libro"""
+        if 1 <= calificacion <= 5:
+            reseña = {
+                "usuario": usuario.nombre_completo,
+                "texto": texto,
+                "calificacion": calificacion,
+                "fecha": datetime.now().strftime("%d/%m/%Y")
+            }
+            self._reseñas.append(reseña)
+            self.agregar_calificacion(calificacion)
+        else:
+            raise ValueError("La calificación debe estar entre 1 y 5")
+    
+    def get_reseñas(self) -> List[dict]:
+        """Retorna todas las reseñas del libro"""
+        return self._reseñas.copy()
+    
+    def get_estadisticas_detalladas(self) -> dict:
+        """Retorna estadísticas detalladas del libro"""
+        return {
+            "titulo": self._titulo,
+            "veces_prestado": self._veces_prestado,
+            "calificacion_promedio": round(self.calificacion_promedio, 2),
+            "total_calificaciones": len(self._calificaciones),
+            "total_reseñas": len(self._reseñas),
+            "popularidad": "Alta" if self._veces_prestado > 10 else "Media" if self._veces_prestado > 5 else "Baja"
+        }
+    
     def get_info_completa(self) -> dict:
         """Retorna información completa del libro"""
         info = self.get_info_basica()
@@ -317,6 +370,78 @@ class Revista(MaterialBibliografico):
     def __str__(self) -> str:
         estado = "✓" if self._disponible else "✗"
         return f"{estado} [{self._id}] {self._titulo} - Nº{self._numero} ({self._mes}/{self._año})"
+
+
+class ClubLectura:
+    """Clase para gestionar clubes de lectura"""
+    
+    _id_counter = 9000
+    
+    def __init__(self, nombre: str, descripcion: str, organizador: Usuario):
+        ClubLectura._id_counter += 1
+        self._id = ClubLectura._id_counter
+        self._nombre = nombre
+        self._descripcion = descripcion
+        self._organizador = organizador
+        self._miembros: List[Usuario] = [organizador]
+        self._libro_actual: Optional[Libro] = None
+        self._libros_leidos: List[Libro] = []
+        self._discusiones: List[dict] = []
+        self._fecha_creacion = datetime.now()
+        self._activo = True
+    
+    @property
+    def nombre(self) -> str:
+        return self._nombre
+    
+    @property
+    def total_miembros(self) -> int:
+        return len(self._miembros)
+    
+    def agregar_miembro(self, usuario: Usuario):
+        """Agrega un miembro al club"""
+        if usuario not in self._miembros:
+            self._miembros.append(usuario)
+            usuario.agregar_notificacion(f"📚 Te has unido al club '{self._nombre}'")
+            usuario.agregar_puntos(5)  # Bonus por unirse
+    
+    def quitar_miembro(self, usuario: Usuario):
+        """Quita un miembro del club"""
+        if usuario in self._miembros and usuario != self._organizador:
+            self._miembros.remove(usuario)
+    
+    def establecer_libro(self, libro: Libro):
+        """Establece el libro actual del club"""
+        if self._libro_actual:
+            self._libros_leidos.append(self._libro_actual)
+        self._libro_actual = libro
+        for miembro in self._miembros:
+            miembro.agregar_notificacion(f"📖 Nuevo libro en '{self._nombre}': {libro.titulo}")
+    
+    def agregar_discusion(self, usuario: Usuario, comentario: str):
+        """Agrega un comentario a la discusión"""
+        if usuario in self._miembros:
+            discusion = {
+                "usuario": usuario.nombre_completo,
+                "comentario": comentario,
+                "fecha": datetime.now().strftime("%d/%m/%Y %H:%M")
+            }
+            self._discusiones.append(discusion)
+    
+    def get_info(self) -> dict:
+        """Retorna información del club"""
+        return {
+            "id": self._id,
+            "nombre": self._nombre,
+            "organizador": self._organizador.nombre_completo,
+            "miembros": self.total_miembros,
+            "libro_actual": self._libro_actual.titulo if self._libro_actual else "Ninguno",
+            "libros_leidos": len(self._libros_leidos),
+            "activo": self._activo
+        }
+    
+    def __str__(self) -> str:
+        return f"📚 {self._nombre} - {self.total_miembros} miembros - Org: {self._organizador.nombre_completo}"
 
 
 class Reserva:
