@@ -1,4 +1,5 @@
 import requests
+import plotly.express as px
 
 # MAke an API call and store the response.
 url = 'https://api.github.com/search/repositories'
@@ -20,6 +21,8 @@ print(f"Repositories returned: {len(repo_dicts)}")
 
 # Examine the first repository
 # repo_dict = repo_dicts[0]s
+
+print("\nSelected information about each repository:")
 for repo_dict in repo_dicts:
     print("\n Selecting information about the first repository:")
     print(f"Name: {repo_dict['name']}")
