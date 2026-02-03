@@ -34,3 +34,10 @@ def add_drink():
     db.session.add(drink)
     db.session.commit()
     return {"id": drink.id}, 201
+
+@app.route('/drinks/<id>', methods=['DELETE'])
+def delete_drink(id):
+    drink = Drink.query.get_or_404(id)
+    db.session.delete(drink)
+    db.session.commit()
+    return {}, 204
