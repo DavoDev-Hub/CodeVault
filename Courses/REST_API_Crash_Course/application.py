@@ -37,7 +37,9 @@ def add_drink():
 
 @app.route('/drinks/<id>', methods=['DELETE'])
 def delete_drink(id):
-    drink = Drink.query.get_or_404(id)
+    drink = Drink.query.get(id)
+    if drink is None:
+        return{"error": "Drink not found"}, 404
     db.session.delete(drink)
     db.session.commit()
-    return {}, 204
+    return {"message": "Drink deleted"}, 204
