@@ -22,3 +22,8 @@ def get_drinks():
     drinks = Drink.query.all()
     drinks_list = [{"name": drink.name, "description": drink.description} for drink in drinks]
     return {"drinks": drinks_list}
+
+@app.route('/drinks/<id>')
+def get_drink(id):
+    drink = Drink.query.get_or_404(id)
+    return {"name": drink.name, "description": drink.description}
