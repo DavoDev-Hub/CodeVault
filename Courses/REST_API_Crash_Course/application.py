@@ -1,7 +1,7 @@
 from flask import Flask
+app = Flask(__name__)
 from flask_sqlalchemy import SQLAlchemy
 
-app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///drinks.db'
 db = SQLAlchemy(app)
 
@@ -19,4 +19,6 @@ def index():
 
 @app.route('/drinks')
 def get_drinks():
-    return {"drinks": "drink data"}
+    drinks = Drink.query.all()
+    drinks_list = [{"name": drink.name, "description": drink.description} for drink in drinks]
+    return {"drinks": drinks_list}
