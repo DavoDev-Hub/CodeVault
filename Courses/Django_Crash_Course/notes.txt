@@ -1,0 +1,15 @@
+Create a new enviorment for the Django Crash Course project:
+```bash
+python -m venv django_crash_env
+source django_crash_env/bin/activate  # On Windows use `django_crash_env\Scripts\activate`
+```
+
+Install Django:
+```bash
+pip install django
+``` 
+Start a new Django project:
+```bash
+django-admin startproject django_crash_course
+cd django_crash_course
+```
