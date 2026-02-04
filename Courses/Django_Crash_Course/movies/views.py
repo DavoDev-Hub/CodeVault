@@ -27,5 +27,9 @@ def add(request):
     return render(request, 'movies/add.html')
 
 def delete(request, id):
-    Movie.objects.get(pk=id).delete()
+    try:
+        movie = Movie.objects.get(pk=id)
+        movie.delete()
+    except Movie.DoesNotExist:
+        return HttpResponse("Movie not found", status=404)
     return HttpResponseRedirect("/movies")
