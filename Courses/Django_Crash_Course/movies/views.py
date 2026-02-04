@@ -13,3 +13,15 @@ def home(request):
 def detail(request, id):
     data = Movie.objects.get(id=id)
     return render(request, 'movies/detail.html', {'movie': data})
+
+def add(request):
+    title = request.POST.get('title')
+    director = request.POST.get('director')
+    year = request.POST.get('year')
+
+    if title and director and year:
+        movie = Movie(title=title, director=director, year=year)
+        movie.save()
+        return HttpResponse(f"/movies")
+
+    return render(request, 'movies/add.html')
