@@ -1,4 +1,4 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from .models import Movie
 
@@ -22,6 +22,6 @@ def add(request):
     if title and director and year:
         movie = Movie(title=title, director=director, year=year)
         movie.save()
-        return HttpResponse(f"/movies")
+        return HttpResponseRedirect("/movies")
 
     return render(request, 'movies/add.html')
