@@ -3,7 +3,6 @@ Create a new enviorment for the Django Crash Course project:
 python -m venv django_crash_env
 source django_crash_env/bin/activate  # On Windows use `django_crash_env\Scripts\activate`
 ```
-
 Install Django:
 ```bash
 pip install django
@@ -13,3 +12,9 @@ Start a new Django project:
 django-admin startproject django_crash_course
 cd django_crash_course
 ```
+
+----- MVT
+Model = Is a representation of data, usually mapped to a database table.
+View = Is the business logic layer, it processes user requests, interacts with the model, and selects a template to render the final output.
+Template = Is the presentation layer, it defines how the data is displayed to the user, usually in HTML format.
+-----
