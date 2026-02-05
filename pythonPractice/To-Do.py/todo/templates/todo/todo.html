@@ -8,7 +8,10 @@
 <body>
     <h1>To-Do Task</h1>
     <ul>
-        {% for task in tasks}
+        {% for task in tasks %}
+            {{ task.title }}
+            {{ task.description }}
+        {% endfor %}
     </ul>
 </body>
 </html>
