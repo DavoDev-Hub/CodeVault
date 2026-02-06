@@ -9,8 +9,10 @@
     <h1>To-Do Task</h1>
     <ul>
         {% for task in tasks %}
-            <li>{{ task.task_title }}</li>
+            <li>{{ task.task_title }}
+            <a href="/todo/{{ task.id }}">Ver</a></li>
         {% endfor %}
     </ul>
+    <a href="/todo/add">Add task</a>
 </body>
 </html>
