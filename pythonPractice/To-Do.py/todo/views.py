@@ -20,3 +20,11 @@ def add(request):
         task.save()
         return HttpResponseRedirect('/todo')
     return render(request, 'todo/add.html')
+
+def delete(request, id):
+    try:
+        task = Task.objects.get(pk=id)
+        task.delete()
+    except Task.DoesNotExist:
+        return HttpResponse('Task not found', status=404)
+    return HttpResponseRedirect('/todo')
