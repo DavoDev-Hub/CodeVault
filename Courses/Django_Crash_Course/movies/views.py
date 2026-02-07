@@ -33,3 +33,18 @@ def delete(request, id):
     except Movie.DoesNotExist:
         return HttpResponse("Movie not found", status=404)
     return HttpResponseRedirect("/movies")
+
+def update(request, id):
+    try:
+        movie = Movie.objects.get(pk=id)
+    except Movie.DoesNotExist:
+        return HttpResponse("Movie not found", status=404)
+    
+    if request.method == 'POST':
+        movie.title = request.POST.get('title')
+        movie.director = request.POST.get('director')
+        movie.year = request.POST.get('year')
+        movie.save()
+        return HttpResponseRedirect("/movies")
+    
+    return render(request, 'movies/update.html', {'movie': movie})
