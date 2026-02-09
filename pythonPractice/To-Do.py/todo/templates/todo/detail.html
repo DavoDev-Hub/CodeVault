@@ -1,12 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Detalle de Tarea</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-1: #0d1b2a;
+            --bg-2: #1b263b;
+            --card: #f6f7fb;
+            --ink: #0f172a;
+            --muted: #64748b;
+            --accent: #ff7a59;
+            --accent-2: #fbbf24;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            font-family: "Space Grotesk", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background: radial-gradient(1200px 600px at 10% 10%, #2b3a67 0%, transparent 60%),
+                radial-gradient(900px 500px at 90% 20%, #0f766e 0%, transparent 55%),
+                linear-gradient(160deg, var(--bg-1), var(--bg-2));
+            padding: 48px 20px;
+        }
+
+        .card {
+            width: min(720px, 100%);
+            background: var(--card);
+            border-radius: 22px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            animation: rise 700ms ease-out;
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-family: "DM Serif Display", "Times New Roman", serif;
+            margin: 0 0 12px;
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            color: #111827;
+        }
+
+        .description {
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: #1f2937;
+            margin: 0 0 20px;
+            white-space: pre-wrap;
+        }
+
+        .meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-bottom: 22px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: linear-gradient(130deg, var(--accent), var(--accent-2));
+            box-shadow: 0 0 14px var(--accent);
+        }
+
+        .link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            background: #e2e8f0;
+            color: #0f172a;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
 </head>
 <body>
-    {{Task.description}}
-    <a href="/todo">Volver</a>
+    <main class="card">
+        <h1>{{ Task.title }}</h1>
+        <div class="meta">
+            <span class="dot"></span>
+            <span>Detalle de la tarea</span>
+        </div>
+        <p class="description">{{ Task.description }}</p>
+        <a class="link" href="/todo">Volver</a>
+    </main>
 </body>
 </html>
