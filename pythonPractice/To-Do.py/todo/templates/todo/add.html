@@ -1,21 +1,210 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agregar Tarea</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-1: #0d1b2a;
+            --bg-2: #1b263b;
+            --card: #f6f7fb;
+            --ink: #0f172a;
+            --muted: #64748b;
+            --accent: #ff7a59;
+            --accent-2: #fbbf24;
+            --ring: rgba(255, 122, 89, 0.35);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            font-family: "Space Grotesk", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background: radial-gradient(1200px 600px at 10% 10%, #2b3a67 0%, transparent 60%),
+                radial-gradient(900px 500px at 90% 20%, #0f766e 0%, transparent 55%),
+                linear-gradient(160deg, var(--bg-1), var(--bg-2));
+            padding: 48px 20px;
+        }
+
+        .shell {
+            width: min(920px, 100%);
+            display: grid;
+            gap: 24px;
+            align-items: center;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+
+        .hero {
+            color: #e2e8f0;
+            padding: 12px 10px;
+        }
+
+        .hero h1 {
+            font-family: "DM Serif Display", "Times New Roman", serif;
+            font-size: clamp(2rem, 3.5vw, 3.2rem);
+            margin: 0 0 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .hero p {
+            margin: 0 0 18px;
+            color: #cbd5f5;
+            line-height: 1.6;
+        }
+
+        .hero .meta {
+            display: inline-flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: linear-gradient(130deg, var(--accent), var(--accent-2));
+            box-shadow: 0 0 14px var(--accent);
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            animation: rise 700ms ease-out;
+        }
+
+        @keyframes rise {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        form {
+            display: grid;
+            gap: 16px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            border: 1px solid #cbd5f5;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 1rem;
+            font-family: inherit;
+            background: #fff;
+            transition: border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--ring);
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button,
+        .link {
+            appearance: none;
+            border: none;
+            border-radius: 999px;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        button {
+            background: linear-gradient(130deg, var(--accent), var(--accent-2));
+            color: #111827;
+            box-shadow: 0 10px 24px rgba(251, 191, 36, 0.35);
+            transition: transform 160ms ease, box-shadow 160ms ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(251, 191, 36, 0.45);
+        }
+
+        .link {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .helper {
+            font-size: 0.88rem;
+            color: var(--muted);
+        }
+    </style>
 </head>
 <body>
-    <form action="/todo/add" method="POST">
-        {% csrf_token %}
-        <label for="task_title">Title:</label>
-        <input type="text" id="task_title" name="task_title" required><br>
+    <main class="shell">
+        <section class="hero" aria-hidden="true">
+            <h1>Agregar una nueva tarea</h1>
+            <p>Organiza tu dia con un flujo claro. Define el titulo, agrega contexto y sigue avanzando sin fricciones.</p>
+            <div class="meta">
+                <span class="dot"></span>
+                <span>Registro rapido y limpio</span>
+            </div>
+        </section>
 
-        <label for="description">Description:</label>
-        <input type="text" id="description" name="description" required><br>
-        
-        <input type="submit" value="Add Task">
-    </form>
-    <a href="/todo">Volver</a>
+        <section class="card">
+            <form action="/todo/add" method="POST">
+                {% csrf_token %}
+                <div>
+                    <label for="task_title">Titulo</label>
+                    <input type="text" id="task_title" name="task_title" placeholder="Ej. Preparar reporte" required>
+                </div>
+
+                <div>
+                    <label for="description">Descripcion</label>
+                    <textarea id="description" name="description" placeholder="Describe los detalles clave..." required></textarea>
+                    <div class="helper">Tip: usa verbos de accion para mantener el enfoque.</div>
+                </div>
+
+                <div class="actions">
+                    <button type="submit">Guardar tarea</button>
+                    <a class="link" href="/todo">Volver</a>
+                </div>
+            </form>
+        </section>
+    </main>
 </body>
 </html>
